@@ -54,10 +54,10 @@ def fill_with_last_observation(arr):
 class LoadDataset(Dataset):
     def __init__(self, file_path, seq_len, feature_num, model_type):
         super(LoadDataset, self).__init__()
-        self.file_path = file_path
-        self.seq_len = seq_len
-        self.feature_num = feature_num
-        self.model_type = model_type
+        self.file_path = file_path#'generated_datasets/physio2012_37feats_01masked/datasets.h5'
+        self.seq_len = seq_len#48
+        self.feature_num = feature_num#37
+        self.model_type = model_type#'SAITS'
 
 
 class LoadValTestDataset(LoadDataset):
@@ -129,10 +129,10 @@ class LoadTrainDataset(LoadDataset):
         self, file_path, seq_len, feature_num, model_type, masked_imputation_task
     ):
         super(LoadTrainDataset, self).__init__(
-            file_path, seq_len, feature_num, model_type
+            file_path, seq_len, feature_num, model_type#'generated_datasets/physio2012_37feats_01masked/datasets.h5' 48 37 'SAITS'
         )
-        self.masked_imputation_task = masked_imputation_task
-        if masked_imputation_task:
+        self.masked_imputation_task = masked_imputation_task#True
+        if masked_imputation_task:#True
             self.artificial_missing_rate = 0.2
             assert (
                 0 < self.artificial_missing_rate < 1
@@ -145,27 +145,27 @@ class LoadTrainDataset(LoadDataset):
         return len(self.X)
 
     def __getitem__(self, idx):
-        X = self.X[idx]
-        if self.masked_imputation_task:
-            X = X.reshape(-1)
-            indices = np.where(~np.isnan(X))[0].tolist()
+        X = self.X[idx]#(48, 37)
+        if self.masked_imputation_task:#True
+            X = X.reshape(-1)#(1776,)
+            indices = np.where(~np.isnan(X))[0].tolist()#非 nan 的索引
             indices = np.random.choice(
                 indices,
                 round(len(indices) * self.artificial_missing_rate),
             )
             X_hat = np.copy(X)
             X_hat[indices] = np.nan  # mask values selected by indices
-            missing_mask = (~np.isnan(X_hat)).astype(np.float32)
-            indicating_mask = ((~np.isnan(X)) ^ (~np.isnan(X_hat))).astype(np.float32)
+            missing_mask = (~np.isnan(X_hat)).astype(np.float32)#(1776,)有缺失值的位置为1
+            indicating_mask = ((~np.isnan(X)) ^ (~np.isnan(X_hat))).astype(np.float32)#(1776,)缺失值的位置为1
             X = np.nan_to_num(X)
             X_hat = np.nan_to_num(X_hat)
             # reshape into time series
-            X = X.reshape(self.seq_len, self.feature_num)
-            X_hat = X_hat.reshape(self.seq_len, self.feature_num)
-            missing_mask = missing_mask.reshape(self.seq_len, self.feature_num)
-            indicating_mask = indicating_mask.reshape(self.seq_len, self.feature_num)
+            X = X.reshape(self.seq_len, self.feature_num)#(48, 37)
+            X_hat = X_hat.reshape(self.seq_len, self.feature_num)#(48, 37)
+            missing_mask = missing_mask.reshape(self.seq_len, self.feature_num)#(48, 37)
+            indicating_mask = indicating_mask.reshape(self.seq_len, self.feature_num)#(48, 37)
 
-            if self.model_type in ["Transformer", "SAITS"]:
+            if self.model_type in ["Transformer", "SAITS"]:#True
                 sample = (
                     torch.tensor(idx),
                     torch.from_numpy(X_hat.astype("float32")),
@@ -316,13 +316,13 @@ class UnifiedDataLoader:
         model_type: model type, determine returned values;
         masked_imputation_task: whether to return data for masked imputation task, only for training/validation sets;
         """
-        self.dataset_path = os.path.join(dataset_path, "datasets.h5")
-        self.seq_len = seq_len
-        self.feature_num = feature_num
-        self.batch_size = batch_size
-        self.num_workers = num_workers
-        self.model_type = model_type
-        self.masked_imputation_task = masked_imputation_task
+        self.dataset_path = os.path.join(dataset_path, "datasets.h5")#'generated_datasets/physio2012_37feats_01masked/datasets.h5'
+        self.seq_len = seq_len#48
+        self.feature_num = feature_num#37
+        self.batch_size = batch_size#128
+        self.num_workers = num_workers#4
+        self.model_type = model_type#"SAITS"
+        self.masked_imputation_task = masked_imputation_task#True
 
         self.train_dataset, self.train_loader, self.train_set_size = None, None, None
         self.val_dataset, self.val_loader, self.val_set_size = None, None, None

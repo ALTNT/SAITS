@@ -35,7 +35,7 @@ class ScaledDotProductAttention(nn.Module):
 
     def __init__(self, temperature, attn_dropout=0.1):
         super().__init__()
-        self.temperature = temperature
+        self.temperature = temperature#d_k**0.5
         self.dropout = nn.Dropout(attn_dropout)
 
     def forward(self, q, k, v, attn_mask=None):
@@ -50,12 +50,12 @@ class ScaledDotProductAttention(nn.Module):
 class MultiHeadAttention(nn.Module):
     """original Transformer multi-head attention"""
 
-    def __init__(self, n_head, d_model, d_k, d_v, attn_dropout):
+    def __init__(self, n_head, d_model, d_k, d_v, attn_dropout):#n_head = 8, d_model = 256, d_k = 32, d_v = 32, attn_dropout = 0.0
         super().__init__()
 
-        self.n_head = n_head
-        self.d_k = d_k
-        self.d_v = d_v
+        self.n_head = n_head#8
+        self.d_k = d_k#32
+        self.d_v = d_v#32
 
         self.w_qs = nn.Linear(d_model, n_head * d_k, bias=False)
         self.w_ks = nn.Linear(d_model, n_head * d_k, bias=False)
@@ -102,7 +102,7 @@ class PositionWiseFeedForward(nn.Module):
 
     def forward(self, x):
         residual = x
-        x = self.layer_norm(x)
+        x = self.layer_norm(x)#torch.Size([128, 48, 256])
         x = self.w_2(F.relu(self.w_1(x)))
         x = self.dropout(x)
         x += residual
@@ -113,7 +113,7 @@ class EncoderLayer(nn.Module):
     def __init__(
         self,
         d_time,
-        d_feature,
+        d_feature,#74
         d_model,
         d_inner,
         n_head,
@@ -125,32 +125,32 @@ class EncoderLayer(nn.Module):
     ):
         super(EncoderLayer, self).__init__()
 
-        self.diagonal_attention_mask = kwargs["diagonal_attention_mask"]
+        self.diagonal_attention_mask = kwargs["diagonal_attention_mask"]#True
         self.device = kwargs["device"]
-        self.d_time = d_time
-        self.d_feature = d_feature
+        self.d_time = d_time#48
+        self.d_feature = d_feature#74
 
         self.layer_norm = nn.LayerNorm(d_model)
-        self.slf_attn = MultiHeadAttention(n_head, d_model, d_k, d_v, attn_dropout)
-        self.dropout = nn.Dropout(dropout)
-        self.pos_ffn = PositionWiseFeedForward(d_model, d_inner, dropout)
+        self.slf_attn = MultiHeadAttention(n_head, d_model, d_k, d_v, attn_dropout)#8,256,32,32,0
+        self.dropout = nn.Dropout(dropout)#0.0
+        self.pos_ffn = PositionWiseFeedForward(d_model, d_inner, dropout)#256 512 0
 
     def forward(self, enc_input):
-        if self.diagonal_attention_mask:
-            mask_time = torch.eye(self.d_time).to(self.device)
+        if self.diagonal_attention_mask:#True
+            mask_time = torch.eye(self.d_time).to(self.device)#torch.Size([48, 48])
         else:
             mask_time = None
 
-        residual = enc_input
+        residual = enc_input#torch.Size([128, 48, 256])
         # here we apply LN before attention cal, namely Pre-LN, refer paper https://arxiv.org/abs/2002.04745
-        enc_input = self.layer_norm(enc_input)
+        enc_input = self.layer_norm(enc_input)#torch.Size([128, 48, 256])
         enc_output, attn_weights = self.slf_attn(
             enc_input, enc_input, enc_input, attn_mask=mask_time
         )
         enc_output = self.dropout(enc_output)
         enc_output += residual
 
-        enc_output = self.pos_ffn(enc_output)
+        enc_output = self.pos_ffn(enc_output)#PositionWiseFeedForward
         return enc_output, attn_weights
 
 

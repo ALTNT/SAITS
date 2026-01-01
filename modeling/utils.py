@@ -169,7 +169,7 @@ def setup_logger(log_file_path, log_name, mode="a"):
 
 class Controller:
     def __init__(self, early_stop_patience):
-        self.original_early_stop_patience_value = early_stop_patience
+        self.original_early_stop_patience_value = early_stop_patience#30
         self.early_stop_patience = early_stop_patience
         self.state_dict = {
             # `step` is for training stage
@@ -204,7 +204,7 @@ class Controller:
             if imputation_MAE_dropped:
                 self.state_dict["save_model"] = True
 
-            if self.state_dict["save_model"]:
+            if self.state_dict["save_model"]:#更新了
                 self.early_stop_patience = self.original_early_stop_patience_value
             else:
                 # if use early_stopping, then update its patience

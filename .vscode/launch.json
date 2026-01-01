@@ -1,0 +1,27 @@
+{
+    // 使用 IntelliSense 了解相关属性。 
+    // 悬停以查看现有属性的描述。
+    // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python Debugger: Current File with Arguments",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            // "args": "${command:pickArgs}"
+            // python run_models.py --config_path configs/PhysioNet2012_SAITS_best.ini NIPS_results/PhysioNet2012_SAITS_best.out
+            // "args": [
+            //     "--config_path",
+            //     "configs/PhysioNet2012_SAITS_best.ini",
+            //     // "NIPS_results/PhysioNet2012_SAITS_best.out",
+            // ]
+            "args": [
+                "--config_path",
+                "configs/RS_SAITS_best.ini",
+                // "NIPS_results/PhysioNet2012_SAITS_best.out",
+            ]
+        }
+    ]
+}

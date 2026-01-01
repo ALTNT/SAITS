@@ -1,0 +1,21 @@
+2026-01-01 23:04:25,216 - args: Namespace(config_path='configs/RS_SAITS_best.ini', test_mode=False, param_searching_mode=False, dataset_base_dir='generated_datasets', result_saving_base_dir='NIPS_results2', seq_len=75, batch_size=128, num_workers=4, feature_num=10, dataset_name='data-no-mask-cloud', dataset_path='generated_datasets/data-no-mask-cloud', eval_every_n_steps=600, MIT=True, ORT=True, lr=0.000682774550436755, optimizer_type='adam', weight_decay=0.0, device='cuda', epochs=10000, early_stop_patience=300, model_saving_strategy='best', max_norm=0.0, imputation_loss_weight=1.0, reconstruction_loss_weight=1.0, model_name='PhysioNet2012_SAITS_best', model_type='SAITS_for_CACM', input_with_mask=False, n_groups=3, n_group_inner_layers=1, param_sharing_strategy='inner_group', d_model=256, d_inner=512, n_head=8, d_k=32, d_v=32, dropout=0.0, diagonal_attention_mask=True, model_saving='NIPS_results2/PhysioNet2012_SAITS_best/models/2026-01-01_T23:04:25', log_saving='NIPS_results2/PhysioNet2012_SAITS_best/logs')
+2026-01-01 23:04:25,216 - Config file path: configs/RS_SAITS_best.ini
+2026-01-01 23:04:25,216 - Model name: PhysioNet2012_SAITS_best
+2026-01-01 23:04:31,894 - Num of total trainable params is: 3168222
+2026-01-01 23:04:32,144 - Creating adam optimizer...
+2026-01-01 23:04:32,935 - Entering training mode...
+2026-01-01 23:04:32,935 - train set len is 1760000, batch size is 128,so each epoch has 13750 steps
+2026-01-01 23:04:33,916 - idx: 0
+2026-01-01 23:04:33,916 - Epoch 0: Data loading time: 0.7874s, Model forward/backward time: 0.1911s
+2026-01-01 23:04:40,676 - idx: 200
+2026-01-01 23:04:40,676 - Epoch 0: Data loading time: 0.0001s, Model forward/backward time: 0.0238s
+2026-01-01 23:04:45,502 - idx: 400
+2026-01-01 23:04:45,502 - Epoch 0: Data loading time: 0.0001s, Model forward/backward time: 0.0238s
+2026-01-01 23:05:18,313 - best_imputation_MAE has been updated to 0.23226076364517212
+2026-01-01 23:05:18,330 - Saved model -> NIPS_results2/PhysioNet2012_SAITS_best/models/2026-01-01_T23:04:25/model_trainStep_600_valStep_1_imputationMAE_0.2323
+2026-01-01 23:05:18,363 - idx: 600
+2026-01-01 23:05:18,363 - Epoch 0: Data loading time: 0.0002s, Model forward/backward time: 0.0255s
+2026-01-01 23:05:23,233 - idx: 800
+2026-01-01 23:05:23,234 - Epoch 0: Data loading time: 0.0001s, Model forward/backward time: 0.0239s
+2026-01-01 23:05:28,081 - idx: 1000
+2026-01-01 23:05:28,081 - Epoch 0: Data loading time: 0.0001s, Model forward/backward time: 0.0241s

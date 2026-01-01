@@ -33,7 +33,7 @@ import pandas as pd
 from sklearn.preprocessing import StandardScaler
 from tsdb import pickle_dump
 
-sys.path.append("..")
+sys.path.append(".")
 from modeling.utils import setup_logger
 from dataset_generating_scripts.data_processing_utils import (
     window_truncate,
@@ -63,7 +63,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    dataset_saving_dir = os.path.join(args.saving_path, args.dataset_name)
+    dataset_saving_dir = os.path.join(args.saving_path, args.dataset_name)#./test
     if not os.path.exists(dataset_saving_dir):
         os.makedirs(dataset_saving_dir)
 

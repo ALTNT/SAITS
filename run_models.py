@@ -34,6 +34,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
+import time
+
+
 
 try:
     import nni
@@ -135,7 +138,7 @@ def summary_write_into_tb(summary_writer, info_dict, step, stage):
 def result_processing(results):
     """process results and losses for each training step"""
     results["total_loss"] = torch.tensor(0.0, device=args.device)
-    if args.model_type == "BRITS":
+    if args.model_type == "BRITS":#False
         results["total_loss"] = (
             results["consistency_loss"] * args.consistency_loss_weight
         )
@@ -145,9 +148,9 @@ def result_processing(results):
     results["imputation_loss"] = (
         results["imputation_loss"] * args.imputation_loss_weight
     )
-    if args.MIT:
+    if args.MIT:#True
         results["total_loss"] += results["imputation_loss"]
-    if args.ORT:
+    if args.ORT:#True
         results["total_loss"] += results["reconstruction_loss"]
     return results
 
@@ -158,13 +161,13 @@ def process_each_training_step(
     """process each training step and return whether to early stop"""
     state_dict = training_controller(stage="train")
     # apply gradient clipping if args.max_norm != 0
-    if args.max_norm != 0:
+    if args.max_norm != 0:#False
         nn.utils.clip_grad_norm_(model.parameters(), max_norm=args.max_norm)
     results["total_loss"].backward()
     optimizer.step()
 
     summary_write_into_tb(summary_writer, results, state_dict["train_step"], "train")
-    if state_dict["train_step"] % args.eval_every_n_steps == 0:
+    if state_dict["train_step"] % args.eval_every_n_steps == 0:#30
         state_dict_from_val = validate(
             model, val_dataloader, summary_writer, training_controller, logger
         )
@@ -187,8 +190,8 @@ def model_processing(
 ):
     if stage == "train":
         optimizer.zero_grad()
-        if not args.MIT:
-            if args.model_type in ["BRITS", "MRNN"]:
+        if not args.MIT:#False
+            if args.model_type in ["BRITS", "MRNN"]:#False
                 (
                     indices,
                     X,
@@ -219,8 +222,8 @@ def model_processing(
                 summary_writer,
                 logger,
             )
-        else:
-            if args.model_type in ["BRITS", "MRNN"]:
+        else:#True
+            if args.model_type in ["BRITS", "MRNN"]:#False
                 (
                     indices,
                     X,
@@ -243,16 +246,16 @@ def model_processing(
                         "deltas": back_deltas,
                     },
                 }
-            else:
+            else:#True
                 indices, X, missing_mask, X_holdout, indicating_mask = map(
                     lambda x: x.to(args.device), data
                 )
                 inputs = {
-                    "indices": indices,
-                    "X": X,
-                    "missing_mask": missing_mask,
-                    "X_holdout": X_holdout,
-                    "indicating_mask": indicating_mask,
+                    "indices": indices,#torch.Size([128])
+                    "X": X,#torch.Size([128, 48, 37])
+                    "missing_mask": missing_mask,#torch.Size([128, 48, 37])
+                    "X_holdout": X_holdout,#torch.Size([128, 48, 37])
+                    "indicating_mask": indicating_mask,#torch.Size([128, 48, 37])
                 }
             results = result_processing(model(inputs, stage))
             early_stopping = process_each_training_step(
@@ -317,11 +320,17 @@ def train(
     training_controller,
     logger,
 ):
-    for epoch in range(args.epochs):
+    for epoch in range(args.epochs):#10000
         early_stopping = False
-        args.final_epoch = True if epoch == args.epochs - 1 else False
+        args.final_epoch = True if epoch == args.epochs - 1 else False#False
+        
+        start_time = time.time()
         for idx, data in enumerate(train_dataloader):
+            data_time = time.time() - start_time
+            
             model.train()
+            
+            process_start_time = time.time()
             early_stopping = model_processing(
                 data,
                 model,
@@ -332,8 +341,16 @@ def train(
                 training_controller,
                 logger,
             )
+            process_time = time.time() - process_start_time
+            
+            if idx % 200 == 0:
+                logger.info(f"idx: {idx}")
+                logger.info(f"Epoch {epoch}: Data loading time: {data_time:.4f}s, Model forward/backward time: {process_time:.4f}s")
+
             if early_stopping:
                 break
+            
+            start_time = time.time()
         if early_stopping:
             break
         training_controller.epoch_num_plus_1()
@@ -383,7 +400,7 @@ def validate(model, val_iter, summary_writer, training_controller, logger):
     }
     state_dict = training_controller("val", info_dict, logger)
     summary_write_into_tb(summary_writer, info_dict, state_dict["val_step"], "val")
-    if args.param_searching_mode:
+    if args.param_searching_mode:#False
         nni.report_intermediate_result(info_dict["imputation_MAE"])
         if args.final_epoch or state_dict["should_stop"]:
             nni.report_final_result(state_dict["best_imputation_MAE"])
@@ -524,27 +541,27 @@ if __name__ == "__main__":
     cfg.read(args.config_path)
     args = read_arguments(args, cfg)
 
-    if args.model_type in ["Transformer", "SAITS"]:  # if SA-based model
-        args.input_with_mask = cfg.getboolean("model", "input_with_mask")
-        args.n_groups = cfg.getint("model", "n_groups")
-        args.n_group_inner_layers = cfg.getint("model", "n_group_inner_layers")
-        args.param_sharing_strategy = cfg.get("model", "param_sharing_strategy")
+    if args.model_type in ["Transformer", "SAITS"]:  #True if SA-based model
+        args.input_with_mask = cfg.getboolean("model", "input_with_mask")#True
+        args.n_groups = cfg.getint("model", "n_groups")#5
+        args.n_group_inner_layers = cfg.getint("model", "n_group_inner_layers")#1
+        args.param_sharing_strategy = cfg.get("model", "param_sharing_strategy")#'inner_group'
         assert args.param_sharing_strategy in [
             "inner_group",
             "between_group",
         ], 'only "inner_group"/"between_group" sharing'
-        args.d_model = cfg.getint("model", "d_model")
-        args.d_inner = cfg.getint("model", "d_inner")
-        args.n_head = cfg.getint("model", "n_head")
-        args.d_k = cfg.getint("model", "d_k")
-        args.d_v = cfg.getint("model", "d_v")
-        args.dropout = cfg.getfloat("model", "dropout")
+        args.d_model = cfg.getint("model", "d_model")#256
+        args.d_inner = cfg.getint("model", "d_inner")#512
+        args.n_head = cfg.getint("model", "n_head")#8
+        args.d_k = cfg.getint("model", "d_k")#32
+        args.d_v = cfg.getint("model", "d_v")#32
+        args.dropout = cfg.getfloat("model", "dropout")#0.0
         args.diagonal_attention_mask = cfg.getboolean(
             "model", "diagonal_attention_mask"
-        )
+        )#True
 
         dict_args = vars(args)
-        if args.param_searching_mode:
+        if args.param_searching_mode:#False
             tuner_params = nni.get_next_parameter()
             dict_args.update(tuner_params)
             experiment_id = nni.get_experiment_id()
@@ -602,7 +619,7 @@ if __name__ == "__main__":
         "best",
         "none",
     ], "model saving strategy must be all/best/none"
-    if args.model_saving_strategy.lower() == "none":
+    if args.model_saving_strategy.lower() == "none":#False
         args.model_saving_strategy = False
     assert (
         args.optimizer_type in OPTIMIZER.keys()
@@ -614,7 +631,7 @@ if __name__ == "__main__":
     logger = setup_logger(args.log_saving + "_" + time_now, "w")
     logger.info(f"args: {args}")
     logger.info(f"Config file path: {args.config_path}")
-    logger.info(f"Model name: {args.model_name}")
+    logger.info(f"Model name: {args.model_name}")#PhysioNet2012_SAITS_best
 
     unified_dataloader = UnifiedDataLoader(
         args.dataset_path,
@@ -656,13 +673,13 @@ if __name__ == "__main__":
 
         optimizer = OPTIMIZER[args.optimizer_type](
             model.parameters(), lr=dict_args["lr"], weight_decay=args.weight_decay
-        )
+        )#adam
         logger.info("Entering training mode...")
         train_dataloader, val_dataloader = unified_dataloader.get_train_val_dataloader()
         training_controller = Controller(args.early_stop_patience)
 
-        train_set_size = unified_dataloader.train_set_size
-        logger.info(
+        train_set_size = unified_dataloader.train_set_size#2557
+        logger.info(#train set len is 2557, batch size is 128,so each epoch has 20 steps
             f"train set len is {train_set_size}, batch size is {args.batch_size},"
             f"so each epoch has {math.ceil(train_set_size / args.batch_size)} steps"
         )
