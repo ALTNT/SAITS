@@ -1164,9 +1164,9 @@ if __name__ == "__main__":
         return DataLoader(
             dataset,
             sampler=sampler,
-            batch_size=128 * len(gpus), # 保持原有的 batch_size 逻辑
-            shuffle=False, # 使用 DistributedSampler 时必须为 False
-            num_workers=4,
+            batch_size=args.batch_size, # Use batch_size from args
+            shuffle=False, # Must be False with DistributedSampler
+            num_workers=args.num_workers, # Use num_workers from args
             worker_init_fn=seed_worker,
             pin_memory=True,
             drop_last=(shuffle is True), # 训练集丢弃最后不完整的 batch，验证集保留
