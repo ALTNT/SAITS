@@ -1,3 +1,5 @@
 {
-    "python.languageServer": "None"
+    "python.languageServer": "None",
+    "workbench.editor.wrapTabs": true,
+    "search.followSymlinks": false
 }

@@ -1,12 +1,22 @@
+
+# 搜索空间的定义是一个 JSON 文件，文件名在 searchSpacePath 中指定。
 experimentName: SAITS hyper-param searching
+# 实验名称，用于标识这个搜索实验。
 authorName: tempuser
+# 作者名称，用于标识这个搜索实验的作者。
 trialConcurrency: 12
+# 并发trial数量，即同时运行的trial数量。
 trainingServicePlatform: local
+# 训练服务平台，这里设置为本地（local）。
 searchSpacePath: SAITS_searching_space.json
+# 搜索空间文件路径，指定了哪些参数需要调整，以及它们的取值范围。
 multiThread: true
+# 是否启用多线程。
 useAnnotation: false
+# 是否使用注释。
 tuner:
     builtinTunerName: Random
+# 优化器（tuner）的名称，这里设置为随机搜索（Random）。
 
 trial:
     command: python ../../run_models.py --config_path SAITS_basic_config.ini --param_searching_mode
