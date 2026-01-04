@@ -143,6 +143,12 @@ class EncoderLayer(nn.Module):
 
         residual = enc_input#torch.Size([128, 48, 256])
         # here we apply LN before attention cal, namely Pre-LN, refer paper https://arxiv.org/abs/2002.04745
+        # Post Norm的结构迁移性能更加好，也就是说在Pretraining中，Pre Norm和Post Norm都能做到大致相同的结果，
+        # 但是Post Norm的Finetune效果明显更好。
+        # 可能读者会反问《On Layer Normalization in the Transformer Architecture》不是显示Pre Norm要好于Post Norm吗？
+        # 这是不是矛盾了？其实这篇文章比较的是在完全相同的训练设置下Pre Norm的效果要优于Post Norm，
+        # 这只能显示出Pre Norm更容易训练，因为Post Norm要达到自己的最优效果，不能用跟Pre Norm一样的训
+        # 练配置（比如Pre Norm可以不加Warmup但Post Norm通常要加），所以结论并不矛盾。
         enc_input = self.layer_norm(enc_input)#torch.Size([128, 48, 256])
         enc_output, attn_weights = self.slf_attn(
             enc_input, enc_input, enc_input, attn_mask=mask_time
@@ -154,29 +160,57 @@ class EncoderLayer(nn.Module):
         return enc_output, attn_weights
 
 
+# class PositionalEncoding(nn.Module):
+#     def __init__(self, d_hid, n_position=200):
+#         super(PositionalEncoding, self).__init__()
+#         # Not a parameter
+#         self.register_buffer(
+#             "pos_table", self._get_sinusoid_encoding_table(n_position, d_hid)
+#         )
+
+#     def _get_sinusoid_encoding_table(self, n_position, d_hid):
+#         """Sinusoid position encoding table"""
+
+#         def get_position_angle_vec(position):
+#             return [
+#                 position / np.power(10000, 2 * (hid_j // 2) / d_hid)
+#                 for hid_j in range(d_hid)
+#             ]
+
+#         sinusoid_table = np.array(
+#             [get_position_angle_vec(pos_i) for pos_i in range(n_position)]
+#         )
+#         sinusoid_table[:, 0::2] = np.sin(sinusoid_table[:, 0::2])  # dim 2i
+#         sinusoid_table[:, 1::2] = np.cos(sinusoid_table[:, 1::2])  # dim 2i+1
+#         return torch.FloatTensor(sinusoid_table).unsqueeze(0)
+
+#     def forward(self, x):
+#         return x + self.pos_table[:, : x.size(1)].clone().detach()
+
+# PositionalEncoding(out_dim, 366+2, T=1000)
 class PositionalEncoding(nn.Module):
-    def __init__(self, d_hid, n_position=200):
+    def __init__(self, d_model, max_len=5000, T: int = 10000):
         super(PositionalEncoding, self).__init__()
-        # Not a parameter
-        self.register_buffer(
-            "pos_table", self._get_sinusoid_encoding_table(n_position, d_hid)
-        )
+        # self.pe = nn.Parameter(torch.randn(max_len, d_model).unsqueeze(0))#位置编码
+        # 初始化位置编码矩阵
+        pe = torch.zeros(max_len, d_model)#torch.Size([32, 64])
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)#torch.Size([32, 1])
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-torch.log(torch.tensor(T)) / d_model))#torch.Size([32])div_term=10000 ^(− 2i/d)
+        # 计算位置编码
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        # 将位置编码矩阵注册为缓冲区（不参与训练）
+        self.register_buffer('pe', pe.unsqueeze(0))
 
-    def _get_sinusoid_encoding_table(self, n_position, d_hid):
-        """Sinusoid position encoding table"""
+    def forward(self, x , doy= None):#x:torch.Size([4096, 30, 64])doy: torch.Size([4096, 30])
+        # x 的形状: (batch_size, seq_len, d_model)
+        # 将位置编码与输入相加
+        if doy is not None:
+            tmp = self.pe[0][doy, :]#torch.Size([4096, 75, 64])
+            x = x + tmp
+        else:
+            tmp = self.pe[:, :x.size(1), :]#torch.Size([1, 30, 64])
+            x = x + tmp#self.pe[:x.size(1), :] 从位置编码矩阵 self.pe 中截取前 seq_len 行，形状为 (seq_len, d_model)。
+        # x = x + self.pe[:, :x.size(1)]
 
-        def get_position_angle_vec(position):
-            return [
-                position / np.power(10000, 2 * (hid_j // 2) / d_hid)
-                for hid_j in range(d_hid)
-            ]
-
-        sinusoid_table = np.array(
-            [get_position_angle_vec(pos_i) for pos_i in range(n_position)]
-        )
-        sinusoid_table[:, 0::2] = np.sin(sinusoid_table[:, 0::2])  # dim 2i
-        sinusoid_table[:, 1::2] = np.cos(sinusoid_table[:, 1::2])  # dim 2i+1
-        return torch.FloatTensor(sinusoid_table).unsqueeze(0)
-
-    def forward(self, x):
-        return x + self.pos_table[:, : x.size(1)].clone().detach()
+        return x

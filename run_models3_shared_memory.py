@@ -268,7 +268,7 @@ def model_processing(
                     },
                 }
             else:#True
-                indices, X, missing_mask, X_holdout, indicating_mask = map(
+                indices, X, missing_mask, X_holdout, indicating_mask, doy = map(
                     lambda x: x.to(args.device), data
                 )
                 inputs = {
@@ -277,6 +277,7 @@ def model_processing(
                     "missing_mask": missing_mask,#torch.Size([128, 48, 37])
                     "X_holdout": X_holdout,#torch.Size([128, 48, 37])
                     "indicating_mask": indicating_mask,#torch.Size([128, 48, 37])
+                    "doy":doy,#torch.Size([128, 48])
                 }
             results = result_processing(model(inputs, stage))
             early_stopping = process_each_training_step(
@@ -676,6 +677,7 @@ class CropAttriMappingDatasetBin(Dataset):
             torch.from_numpy(missing_mask.astype("float32")),
             torch.from_numpy(x.astype("float32")),
             torch.from_numpy(indicating_mask.astype("float32")),
+            torch.from_numpy(doy).type(torch.LongTensor)
         )
         return sample
 
