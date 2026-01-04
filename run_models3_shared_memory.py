@@ -318,7 +318,7 @@ def model_processing(
                 "missing_mask"
             ]  # for error calculation in validation stage
         else:
-            indices, X, missing_mask, X_holdout, indicating_mask = map(
+            indices, X, missing_mask, X_holdout, indicating_mask, doy = map(
                 lambda x: x.to(args.device), data
             )
             inputs = {
@@ -327,6 +327,7 @@ def model_processing(
                 "missing_mask": missing_mask,
                 "X_holdout": X_holdout,
                 "indicating_mask": indicating_mask,
+                "doy":doy,
             }
         results = model(inputs, stage)
         results = result_processing(results)
