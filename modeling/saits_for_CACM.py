@@ -101,7 +101,8 @@ class SAITS_for_CACM(nn.Module):
 
         self.dropout = nn.Dropout(p=dropout)
         # self.position_enc = PositionalEncoding(d_model, n_position=d_time)#d_model = 256, d_time = 48
-        self.position_enc = PositionalEncoding(d_model, 366_2, 10000)#d_model = 256, d_time = 48
+        #
+        self.position_enc = PositionalEncoding(d_model, 366+2, 10000)#d_model = 256, d_time = 48
         # for the 1st block
         self.embedding_1 = nn.Linear(actual_d_feature, d_model)#actual_d_feature = 74, d_model = 256
         self.reduce_dim_z = nn.Linear(d_model, d_feature)#d_model = 256, d_feature = 37
