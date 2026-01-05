@@ -416,7 +416,7 @@ class CropAttriMappingDatasetBin(Dataset):
     # def __init__(self, config, phase, year, root, dataaug=None, target_region=None):
         super().__init__()
         phase = phase.lower()
-        assert phase in ["train", "val", "test"]
+        # assert phase in ["train", "val", "test"]
         self.root = root#'data/data-no-mask-cloud/US-dataset'
         self.sequencelength = 75 # Fixed length
         # self.mean = mean
@@ -429,21 +429,33 @@ class CropAttriMappingDatasetBin(Dataset):
         kernel_size = 3
         confidence_threshold = 90
         self.target_region = target_region  # 保存目标区域
-        mode_name = 'val' if phase == 'valid' else phase  # 修正命名差异
+        
+        # Determine modes to load
+        if phase == 'train_val':
+            modes = ['train', 'val']
+        elif phase == 'valid':
+            modes = ['val']
+        else:
+            modes = [phase]
 
         # 支持分片文件优先，其次是合并文件
         ds_dir = Path(root) / (str(year) + "_valid_kernel" + str(kernel_size) + "_conf" + str(confidence_threshold))
-        merged_bin = ds_dir / f"mode_{mode_name}_merged.bin"
-        shard_glob = ds_dir.glob(f"mode_{mode_name}_merged_shard*.bin")
-        shard_paths = sorted([str(p) for p in shard_glob])
-        if shard_paths:
-            self.bin_paths = shard_paths
-            self.is_sharded = True
-        else:
-            if not merged_bin.exists():
-                raise FileNotFoundError(f"合并后的二进制文件不存在: {merged_bin}")
-            self.bin_paths = [str(merged_bin)]
-            self.is_sharded = False
+        
+        self.bin_paths = []
+        for mode in modes:
+            merged_bin = ds_dir / f"mode_{mode}_merged.bin"
+            shard_glob = ds_dir.glob(f"mode_{mode}_merged_shard*.bin")
+            shard_paths = sorted([str(p) for p in shard_glob])
+            
+            if shard_paths:
+                self.bin_paths.extend(shard_paths)
+            elif merged_bin.exists():
+                self.bin_paths.append(str(merged_bin))
+        
+        if not self.bin_paths:
+             raise FileNotFoundError(f"No binary files found for phase {phase} in {ds_dir}")
+             
+        self.is_sharded = len(self.bin_paths) > 1
 
         # 二进制布局常量
         self.X_FEATURES = self.sequencelength * 10
@@ -1135,12 +1147,20 @@ if __name__ == "__main__":
     # val_dataloader, val_dataset = create_contrastive_dataloader(
     #     args, gpus, phase='train', augment=False)
     # 手动创建完整数据集（复用 create_contrastive_dataloader 中 phase='train' 的逻辑）
+    # 使用 'train_val' 模式一次性加载训练集和验证集数据
     full_dataset = CropAttriMappingDatasetBin(
-        'train', # 保持原代码中的 'test' 参数 (尽管是训练阶段)
+        'train_val', 
         2019, 
         Path(args.dataset_path)/'US-dataset',
         None,
     )
+    # dataset_val = CropAttriMappingDatasetBin(
+    #     'val', # 保持原代码中的 'test' 参数 (尽管是训练阶段)
+    #     2019, 
+    #     Path(args.dataset_path)/'US-dataset',
+    #     None,
+    # )
+
 
     # 计算拆分长度 (80% 训练, 20% 验证)
     total_len = len(full_dataset)
