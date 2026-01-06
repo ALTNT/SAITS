@@ -433,6 +433,8 @@ class CropAttriMappingDatasetBin(Dataset):
         # Determine modes to load
         if phase == 'train_val':
             modes = ['train', 'val']
+        elif phase == 'train_val_test':
+            modes = ['train', 'val', 'test']
         elif phase == 'valid':
             modes = ['val']
         else:
