@@ -678,7 +678,7 @@ class CropAttriMappingDatasetBin(Dataset):
         
         masked_rows = np.zeros(self.sequencelength, dtype=bool)#(75,)
         if candidate_timestep_idx.size > 0:#进行人工掩码
-            num_mask_ts = int(round(candidate_timestep_idx.size * 0.2))
+            num_mask_ts = int(round(candidate_timestep_idx.size * 0.4))
             if num_mask_ts > 0:
                 chosen_ts = np.random.choice(candidate_timestep_idx, num_mask_ts, replace=False)#需要进行人工掩码的索引
                 x_hat[chosen_ts, :] = np.nan
