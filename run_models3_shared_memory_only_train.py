@@ -154,6 +154,9 @@ def summary_write_into_tb(summary_writer, info_dict, step, stage):
     summary_writer.add_scalar(
         f"reconstruction_MAE/{stage}", info_dict["reconstruction_MAE"], step
     )
+    summary_writer.add_scalar(
+        f"total_variation_loss/{stage}", info_dict['total_variation_loss'], step
+    )
 
 
 def result_processing(results):
@@ -324,9 +327,9 @@ def model_processing(
             inputs = {
                 "indices": indices,
                 "X": X,
-                "missing_mask": missing_mask,
-                "X_holdout": X_holdout,
-                "indicating_mask": indicating_mask,
+                "missing_mask": missing_mask,#torch.Size([256, 75, 10])
+                "X_holdout": X_holdout,#torch.Size([256, 75, 10])
+                "indicating_mask": indicating_mask,#torch.Size([256, 75, 10])
                 "doy":doy,
             }
         results = model(inputs, stage)
@@ -869,8 +872,9 @@ def validate(model, val_iter, summary_writer, training_controller, logger):
         total_loss_collector,
         imputation_loss_collector,
         reconstruction_loss_collector,
+        total_variation_loss_collector,
         reconstruction_MAE_collector,
-    ) = ([], [], [], [])
+    ) = ([], [], [], [], [])
 
     with torch.no_grad():
         for idx, data in enumerate(val_iter):
@@ -889,6 +893,9 @@ def validate(model, val_iter, summary_writer, training_controller, logger):
             imputation_loss_collector.append(
                 results["imputation_loss"].data.cpu().numpy()
             )
+            total_variation_loss_collector.append(
+                results['total_variation_loss'].data.cpu().numpy()
+            )
 
         evalX_collector = torch.cat(evalX_collector)
         evalMask_collector = torch.cat(evalMask_collector)
@@ -901,8 +908,10 @@ def validate(model, val_iter, summary_writer, training_controller, logger):
         "reconstruction_loss": np.asarray(reconstruction_loss_collector).mean(),
         "imputation_loss": np.asarray(imputation_loss_collector).mean(),
         "reconstruction_MAE": np.asarray(reconstruction_MAE_collector).mean(),
+        "total_variation_loss": np.asarray(total_variation_loss_collector).mean(),
         "imputation_MAE": imputation_MAE.cpu().numpy().mean(),
     }
+    logger.info(f"info_dict: {info_dict}")
     state_dict = training_controller("val", info_dict, logger)
     summary_write_into_tb(summary_writer, info_dict, state_dict["val_step"], "val")
     if args.param_searching_mode:#False
@@ -1217,14 +1226,15 @@ if __name__ == "__main__":
             args.result_saving_path
         ) else None
         model = load_model(model, args.model_path, logger)
-        test_dataloader = unified_dataloader.get_test_dataloader()
+        test_dataloader = val_dataloader
+        # test_dataloader = unified_dataloader.get_test_dataloader()
         test_trained_model(model, test_dataloader)
         if args.save_imputations:
             (
                 train_data,
                 val_data,
                 test_data,
-            ) = unified_dataloader.prepare_all_data_for_imputation()
+            ) = None, None, val_dataloader
             impute_all_missing_data(model, train_data, val_data, test_data)
     else:  # in the training mode
         logger.info(f"Creating {args.optimizer_type} optimizer...")

@@ -1,5 +1,6 @@
 from modeling.layers import *
 from modeling.utils import masked_mae_cal
+from modeling.utils import total_variation_loss
 
 class SAITS_for_CACM(nn.Module):
     def __init__(
@@ -132,10 +133,11 @@ class SAITS_for_CACM(nn.Module):
 
         # X_tilde_1 = self.reduce_dim_z(enc_output)#torch.Size([128, 48, 37]) 只是个线性层
         learned_presentation = self.reduce_dim_z(enc_output)
-        imputed_data = (
-            masks * X + (1 - masks) * learned_presentation
-        )  # replace non-missing part with original data
-        return imputed_data, learned_presentation
+        # imputed_data = (
+        #     masks * X + (1 - masks) * learned_presentation
+        # )  # replace non-missing part with original data
+        # return imputed_data, learned_presentation
+        return learned_presentation, learned_presentation
         # X_prime = masks * X + (1 - masks) * X_tilde_1#torch.Size([128, 48, 37])
 
         # the second DMSA block
@@ -195,13 +197,16 @@ class SAITS_for_CACM(nn.Module):
             imputation_MAE = masked_mae_cal(
                 learned_presentation, inputs["X_holdout"], inputs["indicating_mask"]
             )
+            tv_loss = total_variation_loss(learned_presentation) 
         else:
             imputation_MAE = torch.tensor(0.0)
+            tv_loss = torch.tensor(0.0)
 
         return {
             "imputed_data": imputed_data,
             "reconstruction_loss": reconstruction_MAE,
             "imputation_loss": imputation_MAE,
+            "total_variation_loss":tv_loss,
             "reconstruction_MAE": reconstruction_MAE,
             "imputation_MAE": imputation_MAE,
         }

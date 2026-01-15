@@ -115,6 +115,7 @@ def read_arguments(arg_parser, cfg_parser):
     # training settings
     arg_parser.MIT = cfg_parser.getboolean("training", "MIT")
     arg_parser.ORT = cfg_parser.getboolean("training", "ORT")
+    arg_parser.TV = cfg_parser.getboolean("training","TV")
     arg_parser.lr = cfg_parser.getfloat("training", "lr")
     arg_parser.optimizer_type = cfg_parser.get("training", "optimizer_type")
     arg_parser.weight_decay = cfg_parser.getfloat("training", "weight_decay")
@@ -132,6 +133,9 @@ def read_arguments(arg_parser, cfg_parser):
     )
     arg_parser.reconstruction_loss_weight = cfg_parser.getfloat(
         "training", "reconstruction_loss_weight"
+    )
+    arg_parser.total_variation_loss_weight = cfg_parser.getfloat(
+        "training", "total_variation_loss_weight"
     )
     # model settings
     arg_parser.model_name = cfg_parser.get("model", "model_name")
@@ -152,6 +156,9 @@ def summary_write_into_tb(summary_writer, info_dict, step, stage):
         f"reconstruction_loss/{stage}", info_dict["reconstruction_loss"], step
     )
     summary_writer.add_scalar(
+        f"total_variation_loss/{stage}", info_dict['total_variation_loss'], step
+    )
+    summary_writer.add_scalar(
         f"reconstruction_MAE/{stage}", info_dict["reconstruction_MAE"], step
     )
 
@@ -169,10 +176,15 @@ def result_processing(results):
     results["imputation_loss"] = (
         results["imputation_loss"] * args.imputation_loss_weight
     )
+    results['total_variation_loss'] = (
+        results['total_variation_loss'] * args.total_variation_loss_weight
+    )
     if args.MIT:#True
         results["total_loss"] += results["imputation_loss"]
     if args.ORT:#True
         results["total_loss"] += results["reconstruction_loss"]
+    if args.TV:
+        results['total_loss'] += results['total_variation_loss']
     return results
 
 
@@ -619,7 +631,7 @@ class CropAttriMappingDatasetBin(Dataset):
         self._shm_list = []
         self._buffers = []
 
-    def __getitem__(self, index):
+    def __getitem__(self, index, need_y=None):
         # 计算所在分片及片内索引
         # if index < 0 or index >= self.n_samples:
         #     raise IndexError(f'Index {index} out of range [0, {self.n_samples})')
@@ -646,10 +658,16 @@ class CropAttriMappingDatasetBin(Dataset):
 
         n_features = self.X_FEATURES // self.sequencelength
         data = np.array(data, copy=True)
+        y = data[0]
         x = data[1:1 + self.X_FEATURES].reshape(self.sequencelength, n_features)
         doy = data[1 + self.X_FEATURES:1 + self.X_FEATURES + self.DOY_FEATURES].reshape(self.sequencelength)
         # cond = data[1 + self.X_FEATURES + self.DOY_FEATURES:1 + self.X_FEATURES + self.DOY_FEATURES + self.COND_FEATURES].reshape(8, 3)
         scl = data[1 + self.X_FEATURES + self.DOY_FEATURES + self.COND_FEATURES:].reshape(self.sequencelength)#(75,)
+
+        # 预训练策略：为了赋予模型在有效信息稀疏及应急制图场景下提取鲁棒特征的能力，我们对原始 Sentinel-2 数据设计了多任务自监督预训练策略。该策略通过有策略的掩码（Strategic Masking）与数据增强，迫使模型学习作物生长的内在规律：
+        # 掩码插补任务 (MIT): 随机掩盖部分有效观测值（非云和云阴影），迫使编码器仅根据剩余的上下文信息预测这些被掩盖的真实值。该任务旨在让模型学习作物生长曲线的连续性与自相关性。——已实现
+        # 有效观测重建任务 (ORT): 要求模型对未被掩盖的有效观测值进行重构。通过最小化重构误差，确保模型提取的潜在特征能够高保真地保留原始数据的光谱保真度。——已实现
+        # 噪声增强: 向非云/影区域添加高斯噪声（均值0，标准差0.5）以模拟云和云阴影[3]，要求模型能重建该时序,从而提升模型在低质量数据下的鲁棒性。——代码实现可合并到掩码预测任务 (MIT)，已实现
 
         valid_timestep_mask = (scl != 3) & (scl != 8) & (scl != 9) & (scl != 10)#(75,)
         x[x == 0] = np.nan
@@ -667,7 +685,9 @@ class CropAttriMappingDatasetBin(Dataset):
                 masked_rows[chosen_ts] = True
 
         valid_positions = valid_timestep_mask[:, None]#(75, 1)
+        #用于计算L_{ORT}
         missing_mask = ((~np.isnan(x_hat)) & valid_positions).astype(np.float32)#(75, 10) x_hat(实际要输入的时序）中对应位置有观测值且不是云 和shadow,则对应位置为 True
+        #用于计算 L_{MIT}
         indicating_mask_imputation = ((~np.isnan(x)) & valid_positions & np.isnan(x_hat))
         
         # 噪声添加的有效位置：原始有效观测且非云/阴影，且未被人工掩码
@@ -686,6 +706,11 @@ class CropAttriMappingDatasetBin(Dataset):
         # 合并指示掩码：人工掩码位置 OR 噪声添加位置
         indicating_mask = (indicating_mask_imputation | noise_mask).astype(np.float32)
 
+        # 关键修复：将噪声位置的 missing_mask 设为 0
+        # 避免 reconstruction_loss 强迫模型去拟合噪声（输入是含噪数据），从而与 imputation_loss（目标是去噪数据）冲突
+        # 让模型通过 imputation_loss 学习去噪，而不是通过 reconstruction_loss 学习保留噪声
+        missing_mask = missing_mask * (~noise_mask).astype(np.float32)
+
         sample = (
             torch.tensor(index),
             torch.from_numpy(x_hat.astype("float32")),
@@ -693,6 +718,14 @@ class CropAttriMappingDatasetBin(Dataset):
             torch.from_numpy(x.astype("float32")),
             torch.from_numpy(indicating_mask.astype("float32")),
             torch.from_numpy(doy).type(torch.LongTensor)
+        ) if need_y is None else (
+            torch.tensor(index),
+            torch.from_numpy(x_hat.astype("float32")),
+            torch.from_numpy(missing_mask.astype("float32")),
+            torch.from_numpy(x.astype("float32")),
+            torch.from_numpy(indicating_mask.astype("float32")),
+            torch.from_numpy(doy).type(torch.LongTensor),
+            torch.tensor(y)
         )
         return sample
 
@@ -871,8 +904,9 @@ def validate(model, val_iter, summary_writer, training_controller, logger):
         total_loss_collector,
         imputation_loss_collector,
         reconstruction_loss_collector,
+        total_variation_loss_collector,
         reconstruction_MAE_collector,
-    ) = ([], [], [], [])
+    ) = ([], [], [], [], [])
 
     with torch.no_grad():
         for idx, data in enumerate(val_iter):
@@ -887,6 +921,9 @@ def validate(model, val_iter, summary_writer, training_controller, logger):
             )
             reconstruction_loss_collector.append(
                 results["reconstruction_loss"].data.cpu().numpy()
+            )
+            total_variation_loss_collector.append(
+                results['total_variation_loss'].data.cpu().numpy()
             )
             imputation_loss_collector.append(
                 results["imputation_loss"].data.cpu().numpy()
@@ -903,8 +940,10 @@ def validate(model, val_iter, summary_writer, training_controller, logger):
         "reconstruction_loss": np.asarray(reconstruction_loss_collector).mean(),
         "imputation_loss": np.asarray(imputation_loss_collector).mean(),
         "reconstruction_MAE": np.asarray(reconstruction_MAE_collector).mean(),
+        "total_variation_loss": np.asarray(total_variation_loss_collector).mean(),
         "imputation_MAE": imputation_MAE.cpu().numpy().mean(),
     }
+    logger.info(f"info_dict: {info_dict}")
     state_dict = training_controller("val", info_dict, logger)
     summary_write_into_tb(summary_writer, info_dict, state_dict["val_step"], "val")
     if args.param_searching_mode:#False
@@ -977,6 +1016,8 @@ def impute_all_missing_data(model, train_data, val_data, test_data):
         for dataloader, set_name in zip(
             [train_data, val_data, test_data], ["train", "val", "test"]
         ):
+            if dataloader is None:
+                continue
             indices_collector, imputations_collector = [], []
             for idx, data in enumerate(dataloader):
                 if args.model_type in ["BRITS", "MRNN"]:
@@ -1003,24 +1044,38 @@ def impute_all_missing_data(model, train_data, val_data, test_data):
                         },
                     }
                 else:  # then for self-attention based models, i.e. Transformer/SAITS
-                    indices, X, missing_mask = map(lambda x: x.to(args.device), data)
-                    inputs = {"indices": indices, "X": X, "missing_mask": missing_mask}
-                imputed_data, _ = model.impute(inputs)
+                    indices, X, missing_mask, X_holdout, indicating_mask, doy = map(
+                        lambda x: x.to(args.device), data
+                    )
+                    inputs = {
+                        "indices": indices,#torch.Size([128])
+                        "X": X,#torch.Size([128, 48, 37])
+                        "missing_mask": missing_mask,#torch.Size([128, 48, 37])
+                        "X_holdout": X_holdout,#torch.Size([128, 48, 37])
+                        "indicating_mask": indicating_mask,#torch.Size([128, 48, 37])
+                        "doy":doy,#torch.Size([128, 48])
+                    }
+                    # indices, X, missing_mask = map(lambda x: x.to(args.device), data)
+                    # inputs = {"indices": indices, "X": X, "missing_mask": missing_mask}
+                _, imputed_data = model.impute(inputs)
                 indices_collector.append(indices)
                 imputations_collector.append(imputed_data)
 
-            indices_collector = torch.cat(indices_collector)
-            indices = indices_collector.cpu().numpy().reshape(-1)
-            imputations_collector = torch.cat(imputations_collector)
-            imputations = imputations_collector.data.cpu().numpy()
+            indices_collector = torch.cat(indices_collector)#torch.Size([1050000])
+            indices = indices_collector.cpu().numpy().reshape(-1)#torch.Size([1050000])
+            imputations_collector = torch.cat(imputations_collector)#torch.Size([1050000, 75, 10])
+            imputations = imputations_collector.data.cpu().numpy()#(1050000, 75, 10)
             ordered = imputations[np.argsort(indices)]  # to ensure the order of samples
             imputed_data_dict[set_name] = ordered
 
-    imputation_saving_path = os.path.join(args.result_saving_path, "imputations.h5")
+    imputation_saving_path = os.path.join(args.result_saving_path, "imputations.h5")#'./NIPS_results/PhysioNet2012_SAITS_best/step_313/imputations.h5'
     with h5py.File(imputation_saving_path, "w") as hf:
-        hf.create_dataset("imputed_train_set", data=imputed_data_dict["train"])
-        hf.create_dataset("imputed_val_set", data=imputed_data_dict["val"])
-        hf.create_dataset("imputed_test_set", data=imputed_data_dict["test"])
+        if "train" in imputed_data_dict:
+            hf.create_dataset("imputed_train_set", data=imputed_data_dict["train"])
+        if "val" in imputed_data_dict:
+            hf.create_dataset("imputed_val_set", data=imputed_data_dict["val"])
+        if "test" in imputed_data_dict:
+            hf.create_dataset("imputed_test_set", data=imputed_data_dict["test"])
     logger.info(f"Done saving all imputed data into {imputation_saving_path}.")
 
 
@@ -1151,7 +1206,7 @@ if __name__ == "__main__":
     # 手动创建完整数据集（复用 create_contrastive_dataloader 中 phase='train' 的逻辑）
     # 使用 'train_val' 模式一次性加载训练集和验证集数据
     full_dataset = CropAttriMappingDatasetBin(
-        'train_val', 
+        'train_val_test', 
         2019, 
         Path(args.dataset_path)/'US-dataset',
         None,
@@ -1227,14 +1282,21 @@ if __name__ == "__main__":
             args.result_saving_path
         ) else None
         model = load_model(model, args.model_path, logger)
-        test_dataloader = unified_dataloader.get_test_dataloader()
-        test_trained_model(model, test_dataloader)
+        # test_dataloader = unified_dataloader.get_test_dataloader()
+        # test_trained_model(model, test_dataloader)
+        test_dataset = CropAttriMappingDatasetBin(
+            'val', 
+            2019, 
+            Path(args.dataset_path)/'US-dataset',
+            None,
+        )
+        test_dataloader = create_loader(test_dataset, shuffle=False)
         if args.save_imputations:
             (
                 train_data,
                 val_data,
                 test_data,
-            ) = unified_dataloader.prepare_all_data_for_imputation()
+            ) = None, None, test_dataloader
             impute_all_missing_data(model, train_data, val_data, test_data)
     else:  # in the training mode
         logger.info(f"Creating {args.optimizer_type} optimizer...")

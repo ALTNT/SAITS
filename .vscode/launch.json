@@ -20,8 +20,66 @@
             "args": [
                 "--config_path",
                 "configs/RS_SAITS_best.ini",
+                // "--test_mode",
                 // "NIPS_results/PhysioNet2012_SAITS_best.out",
             ]
+            // "args": [
+            //     "--config_path",
+            //     "configs/RS_SAITS_best.ini",
+            //     "--test_mode",
+            //     // "NIPS_results/PhysioNet2012_SAITS_best.out",
+            // ]
+            // python /home/al/gitdep/SAITS/scripts/plot_ndvi_imputation.py \
+            //     --sample_idx 123 \
+            //     --ndvi_idx 0 \
+            //     --imputations_h5 ./NIPS_results/PhysioNet2012_SAITS_best/step_313/imputations.h5 \
+            //     --dataset_root /home/al/gitdep/SAITS/data/data-no-mask-cloud/US-dataset \
+            //     --year 2019 --phase val \
+            //     --output_png ndvi_123.png
+            // "args": [
+            //     "--sample_idx",
+            //     "123",
+            //     "--label",
+            //     "1",
+            //     "--nir_idx",
+            //     "6",
+            //     "--red_idx",
+            //     "2",
+            //     "--imputations_h5",
+            //     "./NIPS_results/PhysioNet2012_SAITS_best/step_313/imputations.h5",
+            //     "--dataset_root",
+            //     "generated_datasets/data-no-mask-cloud/US-dataset",
+            //     "--year",
+            //     "2019",
+            //     "--phase",
+            //     "val",
+            //     "--output_png",
+            //     "ndvi_123.png",
+            // ]
+
+            // python /home/al/gitdep/SAITS/patch_inpute.py \
+            //     --s2_dir /path/to/Indiana_2019_patches \
+            //     --output_dir /path/to/out_imputed \
+            //     --config_path /path/to/your_config.ini \
+            //     --model_path /path/to/SAITS_for_CACM_weights.pth.tar \
+            //     --file_glob 'Indiana_2019_*-*-*.tif' \
+            //     --batch_pixels 8192
+            // "args":[
+            //     "--s2_dir",
+            //     "generated_datasets/US/Iowa_S2_2019_scale_30_maxCloudProbability_100_90_300",
+            //     "--output_dir",
+            //     "generated_datasets/US/inputed_Iowa_S2_2019_scale_30_maxCloudProbability_100_90_300",
+            //     "--config_path",
+            //     "configs/RS_SAITS_best.ini",
+            //     "--model_path",
+            //     "./NIPS_results2/PhysioNet2012_SAITS_best/models/model_train_val_test_trainStep_1132000_valStep_566_imputationMAE_0.1810",
+            //     "--file_glob",
+            //     "Iowa_2019_*-*-*.tif",
+            //     "--output_steps",
+            //     "36","37","38"
+            //     // "--batch_pixels",
+            //     // "8192",
+            // ]
         }
     ]
 }

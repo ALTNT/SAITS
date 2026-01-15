@@ -37,6 +37,11 @@ def masked_mae_cal(inputs, target, mask):
     """calculate Mean Absolute Error"""
     return torch.sum(torch.abs(inputs - target) * mask) / (torch.sum(mask) + 1e-9)
 
+def total_variation_loss(inputs):
+    """calculate total_variation_loss for smooth time-series"""
+    diff = inputs[:, 1:] - inputs[:, :-1]
+    loss = torch.sum(torch.abs(diff)) / diff.numel()
+    return loss
 
 def masked_mse_cal(inputs, target, mask):
     """calculate Mean Square Error"""
@@ -251,7 +256,7 @@ def save_model(model, optimizer, model_state_info, args, saving_path):
 
 
 def load_model(model, checkpoint_path, logger):
-    checkpoint = torch.load(checkpoint_path)
+    checkpoint = torch.load(checkpoint_path, weights_only=False)
     model.load_state_dict(checkpoint["model_state_dict"])
     logger.info(f"Already restored model from checkpoint: {checkpoint_path}")
     return model
