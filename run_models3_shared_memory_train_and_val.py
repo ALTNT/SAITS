@@ -677,6 +677,12 @@ class CropAttriMappingDatasetBin(Dataset):
         valid_timestep_mask = (scl != 3) & (scl != 7) & (scl != 8) & (scl != 9) & (scl != 10)#(75,)
         x[x == 0] = np.nan
         x_hat = x.copy()
+        
+        # 强制将有云/阴影的时间步在输入中设为NaN（视为缺失），使模型无法看到云的反射率
+        # 配合后续的 nan_to_num 和 missing_mask=0，实现“完全无云输入”
+        if True:
+            x_hat[~valid_timestep_mask] = np.nan
+
         obs_per_timestep = np.any(~np.isnan(x_hat), axis=1)#(75,)是观测值则为 True
         candidate_timestep_mask = valid_timestep_mask & obs_per_timestep#(75,) 是观测值且不是云 和shadow则为 True
         candidate_timestep_idx = np.where(candidate_timestep_mask)[0]#（20，）是观测值且不是云 和shadow的索引
