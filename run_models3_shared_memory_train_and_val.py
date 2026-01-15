@@ -669,7 +669,7 @@ class CropAttriMappingDatasetBin(Dataset):
         # 有效观测重建任务 (ORT): 要求模型对未被掩盖的有效观测值进行重构。通过最小化重构误差，确保模型提取的潜在特征能够高保真地保留原始数据的光谱保真度。——已实现
         # 噪声增强: 向非云/影区域添加高斯噪声（均值0，标准差0.5）以模拟云和云阴影[3]，要求模型能重建该时序,从而提升模型在低质量数据下的鲁棒性。——代码实现可合并到掩码预测任务 (MIT)，已实现
 
-        valid_timestep_mask = (scl != 3) & (scl != 8) & (scl != 9) & (scl != 10)#(75,)
+        valid_timestep_mask = (scl != 3) & (scl != 7) & (scl != 8) & (scl != 9) & (scl != 10)#(75,)
         x[x == 0] = np.nan
         x_hat = x.copy()
         obs_per_timestep = np.any(~np.isnan(x_hat), axis=1)#(75,)是观测值则为 True
