@@ -396,6 +396,10 @@ def train(
     logger.info("Finished all epochs. Stop training now.")
 
 class RandomAddNoise: 
+    def __init__(self, mean, std, c = 10):
+        zero = np.zeros((c,), dtype=np.float32)
+        self.zero = (zero - mean) / std#(10,)
+
     def __call__(self, x, valid_positions):
         # x: (T, C), valid_positions: (T, 1) or (T,)
         t, c = x.shape
@@ -410,11 +414,12 @@ class RandomAddNoise:
             for idx in chosen_indices:
                 # 模拟云(增亮)或云阴影(变暗)，各50%概率
                 # 使用绝对值高斯噪声确保方向一致性
-                noise = 1+np.abs(np.random.normal(0, 0.5, size=c))
-                if np.random.rand() < 0.5:
-                    x[idx, :] -= noise # 变暗
-                else:
-                    x[idx, :] += noise # 增亮
+                noise = np.abs(np.random.normal(0, 0.5, size=c))#(10,)
+                if np.random.rand() < 0.2:
+                    # x[idx, :] -= noise # 变暗#
+                    x[idx, :] = self.zero + (x[idx, :] - self.zero) * 0.8 - noise * 0.1
+                else:#0.8
+                    x[idx, :] += (1+noise) # 增亮
                 noise_mask[idx] = True
                 
         return x, noise_mask
@@ -508,7 +513,7 @@ class CropAttriMappingDatasetBin(Dataset):
         # self.max_mapping_doy = config.DATASET.MAX_MAPPING_DOY  # 最晚制图日期（8月底）
         self.masking_probability = 0.5  # 掩蔽概率
 
-        self.add_noise = RandomAddNoise()
+        self.add_noise = RandomAddNoise(mean, std, c=10)
 
     def __len__(self):
         return self.n_samples
