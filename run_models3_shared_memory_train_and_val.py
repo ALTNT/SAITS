@@ -403,14 +403,14 @@ class RandomAddNoise:
         
         # 获取有效位置的索引
         valid_indices = np.where(valid_positions.reshape(-1))[0]#(16,)
-        num_noise = int(len(valid_indices) * 0.15)#数量
+        num_noise = int(len(valid_indices) * 0.3)#数量
         
         if num_noise > 0:
             chosen_indices = np.random.choice(valid_indices, num_noise, replace=False)
             for idx in chosen_indices:
                 # 模拟云(增亮)或云阴影(变暗)，各50%概率
                 # 使用绝对值高斯噪声确保方向一致性
-                noise = np.abs(np.random.normal(0, 0.5, size=c))
+                noise = 1+np.abs(np.random.normal(0, 0.5, size=c))
                 if np.random.rand() < 0.5:
                     x[idx, :] -= noise # 变暗
                 else:
