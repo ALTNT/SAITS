@@ -841,7 +841,7 @@ class PatchBasedMapping:
         plt.close()
 
     @staticmethod
-    def align_timeseries(x, doy, scl, target_length=75):
+    def align_timeseries(x, doy, scl, cloud_prob, target_length=75):
         """
         Aligns the time series to a target length by interpolating and padding.
         This function is extracted from CropAttriMappingDataset7's transform logic.
@@ -856,10 +856,11 @@ class PatchBasedMapping:
             non_zero_indices = np.where(~np.all(x == 0, axis=1))[0]
             x = x[non_zero_indices]#(72, 10)
             scl = scl[non_zero_indices]#(72, 1)
-            doy = doy[non_zero_indices]
+            cloud_prob = cloud_prob[non_zero_indices]#(72, 1)
+            doy = doy[non_zero_indices]#(72,)
             # 如果长度仍然超过 target_length，则进行均匀采样
             if x.shape[0] > target_length:
-                return x[:target_length], doy[:target_length], scl[:target_length]
+                return x[:target_length], doy[:target_length], scl[:target_length], cloud_prob[:target_length]
             x_length = x.shape[0]
             
 
@@ -869,10 +870,12 @@ class PatchBasedMapping:
         new_doy = np.zeros(target_length, dtype=doy.dtype)
         new_x = np.zeros((target_length, x.shape[1]), dtype=x.dtype)
         new_scl = np.zeros((target_length, scl.shape[1]), dtype=scl.dtype)
+        new_cloud_prob = np.zeros((target_length, cloud_prob.shape[1]), dtype=cloud_prob.dtype)
         
         new_doy[:x_length] = doy
         new_x[:x_length] = x
         new_scl[:x_length] = scl
+        new_cloud_prob[:x_length] = cloud_prob
         
         current_length = x_length
         points_added = 0
@@ -896,11 +899,13 @@ class PatchBasedMapping:
             new_doy[insert_pos+1:current_length+1] = new_doy[insert_pos:current_length]
             new_x[insert_pos+1:current_length+1] = new_x[insert_pos:current_length]
             new_scl[insert_pos+1:current_length+1] = new_scl[insert_pos:current_length]
+            new_cloud_prob[insert_pos+1:current_length+1] = new_cloud_prob[insert_pos:current_length]
             
             # Insert new data
             new_doy[insert_pos] = mid_doy
             new_x[insert_pos] = 0  # Zero-padded features
-            new_scl[insert_pos] = 10  
+            new_scl[insert_pos] = 9 #高概率云
+            new_cloud_prob[insert_pos] = 100.0
             
             current_length += 1
             points_added += 1
@@ -921,12 +926,13 @@ class PatchBasedMapping:
 
             new_doy[insert_pos] = new_doy_value
             new_x[insert_pos] = 0
-            new_scl[insert_pos] = 10#表示高云
+            new_scl[insert_pos] = 9#表示高概率云
+            new_cloud_prob[insert_pos] = 100.0
             
             current_length += 1
             points_added += 1
             
-        return new_x, new_doy, new_scl
+        return new_x, new_doy, new_scl, new_cloud_prob
     # all_samples_data = []
 
     # spatial_indices = np.zeros((num_valid, 2), dtype=np.int32)  # 存储空间位置
@@ -989,10 +995,21 @@ class PatchBasedMapping:
         for row in range(H):
             for col in range(W):
                 # 提取像素的时间序列 (T, C)
-                img_val = s2_data[:, row, col,:]  # (T, C)(71, 10)
+                img_val = s2_data[:, row, col,:10]  # (T, C)(71, 10)
                 doy_val = doy_list#(T,)#(71,)
                 scl_val = scl[row, col, :][:, np.newaxis]#(T, 1)
-                x_aligned, doy_aligned, scl_aligned = self.align_timeseries(img_val, doy_val, scl_val, target_length=seq_len)#(75, 10)
+                cloud_prob = np.zeros((T, 1), dtype=np.float32)
+                x_aligned, doy_aligned, scl_aligned,  cloud_prob = self.align_timeseries(img_val, doy_val, scl_val,cloud_prob, target_length=seq_len)#(75, 10)
+                
+                # Mask out cloudy observations in x_aligned based on scl_aligned
+                # SCL values: 3 (Cloud Shadows), 7 (Unclassified), 8 (Cloud Medium Probability), 9 (Cloud High Probability), 10 (Cirrus) are considered invalid/cloudy.
+                # Note: scl_aligned is (75, 1)
+                if True:
+                    scl_flat = scl_aligned.flatten()
+                    cloud_mask = (scl_flat == 3) | (scl_flat == 7) | (scl_flat == 8) | (scl_flat == 9) | (scl_flat == 10)
+                    # Set x_aligned to 0 where cloud_mask is True
+                    x_aligned[cloud_mask] = 0
+                
                 mask = np.zeros((self.sequencelength,), dtype=int)
                 mask[:x_aligned.shape[0]] = 1
                 sample = {
