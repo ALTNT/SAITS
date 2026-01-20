@@ -1004,9 +1004,9 @@ class PatchBasedMapping:
                 # Mask out cloudy observations in x_aligned based on scl_aligned
                 # SCL values: 3 (Cloud Shadows), 7 (Unclassified), 8 (Cloud Medium Probability), 9 (Cloud High Probability), 10 (Cirrus) are considered invalid/cloudy.
                 # Note: scl_aligned is (75, 1)
-                if True:
+                if False:
                     scl_flat = scl_aligned.flatten()
-                    cloud_mask = (scl_flat == 3) | (scl_flat == 7) | (scl_flat == 8) | (scl_flat == 9) | (scl_flat == 10)
+                    cloud_mask = (scl_flat == 3) | (scl_flat == 7) | (scl_flat == 8) | (scl_flat == 9) | (scl_flat == 10) | (cloud_prob.flatten() >= 50)
                     # Set x_aligned to 0 where cloud_mask is True
                     x_aligned[cloud_mask] = 0
                 
