@@ -368,6 +368,21 @@ def train(
             
             model.train()
             
+            # 检查 DOY 是否有异常值
+            # data tuple structure: (index, x_hat, missing_mask, x, indicating_mask, doy, [y])
+            # doy is at index 5
+            # if len(data) >= 6:
+            #     doy_batch = data[5]
+            #     if (doy_batch < 0).any() or (doy_batch >= 400).any():
+            #         min_doy = doy_batch.min().item()
+            #         max_doy = doy_batch.max().item()
+            #         logger.error(f"异常 DOY 检测到! idx: {idx}, Min DOY: {min_doy}, Max DOY: {max_doy}")
+            #         # 找出具体的异常索引
+            #         invalid_indices = torch.where((doy_batch < 0) | (doy_batch >= 400))
+            #         logger.error(f"异常样本索引 (batch内): {invalid_indices}")
+            #         logger.error(f"异常 DOY 值: {doy_batch[invalid_indices]}")
+            #         raise ValueError(f"DOY out of range [0, 400): min={min_doy}, max={max_doy}")
+
             process_start_time = time.time()
             early_stopping = model_processing(
                 data,
@@ -399,6 +414,8 @@ class RandomAddNoise:
     def __init__(self, mean, std, c = 10):
         zero = np.zeros((c,), dtype=np.float32)
         self.zero = (zero - mean) / std#(10,)
+        self.mean = mean
+        self.std = std
 
     def __call__(self, x, valid_positions):
         # x: (T, C), valid_positions: (T, 1) or (T,)
@@ -419,7 +436,14 @@ class RandomAddNoise:
                     # x[idx, :] -= noise # 变暗#
                     x[idx, :] = self.zero + (x[idx, :] - self.zero) * 0.8 - noise * 0.1
                 else:#0.8
-                    x[idx, :] += (1+noise) # 增亮
+                    # 模拟云(增亮)
+                    # 云通常具有较高的反射率且在可见光-近红外波段较为平坦（白色）
+                    # 随机生成一个基础反射率（例如 0.3 ~ 0.6）
+                    cloud_base = np.random.uniform(0.3, 0.6)
+                    # 归一化: (value - mean) / std = value/std + (0-mean)/std = value/std + self.zero
+                    # 这里假设云的光谱是平坦的（cloud_base），加上少量随机扰动
+                    cloud_val = self.zero + (cloud_base + np.random.normal(0, 0.05, size=c)) / self.std
+                    x[idx, :] = cloud_val
                 noise_mask[idx] = True
                 
         return x, noise_mask
@@ -452,6 +476,10 @@ class CropAttriMappingDatasetBin(Dataset):
             modes = ['train', 'val']
         elif phase == 'train_val_test':
             modes = ['train', 'val', 'test']
+        elif phase == 'train_test':
+            modes = ['train', 'val']
+        elif phase == 'val_test':
+            modes = ['val', 'test']
         elif phase == 'valid':
             modes = ['val']
         else:
@@ -514,7 +542,7 @@ class CropAttriMappingDatasetBin(Dataset):
         # self.max_mapping_doy = config.DATASET.MAX_MAPPING_DOY  # 最晚制图日期（8月底）
         self.masking_probability = 0.5  # 掩蔽概率
 
-        self.add_noise = RandomAddNoise(mean, std, c=10)
+        self.add_noise = RandomAddNoise(self.mean, self.std, c=10)
 
     def __len__(self):
         return self.n_samples
@@ -648,9 +676,9 @@ class CropAttriMappingDatasetBin(Dataset):
             shard_idx = int(ptr['shard_idx'])
             local_sample_idx = int(ptr['sample_idx'])
         else:
-            shard_idx = int(np.searchsorted(self.shard_ends, index, side='right'))  # 找到第一个大于index的分片索引
-            prev_end = int(self.shard_ends[shard_idx - 1]) if shard_idx > 0 else 0
-            local_sample_idx = index - prev_end
+            shard_idx = int(np.searchsorted(self.shard_ends, index, side='right'))  # 找到第一个大于index的分片索引 10
+            prev_end = int(self.shard_ends[shard_idx - 1]) if shard_idx > 0 else 0#1200000
+            local_sample_idx = index - prev_end#6752
 
         #old
         # mm = self._ensure_memmap(shard_idx)
@@ -659,7 +687,7 @@ class CropAttriMappingDatasetBin(Dataset):
         # data = mm[start_f:end_f]
         #new 
         buf = self._ensure_shm(shard_idx)
-        start_f = local_sample_idx * self.floats_count
+        start_f = local_sample_idx * self.floats_count#6752000
         data = buf[start_f:start_f + self.floats_count]
 
         n_features = self.X_FEATURES // self.sequencelength
@@ -667,6 +695,8 @@ class CropAttriMappingDatasetBin(Dataset):
         y = data[0]
         x = data[1:1 + self.X_FEATURES].reshape(self.sequencelength, n_features)
         doy = data[1 + self.X_FEATURES:1 + self.X_FEATURES + self.DOY_FEATURES].reshape(self.sequencelength)
+        if (doy < 0).any() or (doy >= 400).any():
+            raise ValueError("DOY values must be between 0 and 399.")
         # cond = data[1 + self.X_FEATURES + self.DOY_FEATURES:1 + self.X_FEATURES + self.DOY_FEATURES + self.COND_FEATURES].reshape(8, 3)
         scl = data[1 + self.X_FEATURES + self.DOY_FEATURES + self.COND_FEATURES:1 + self.X_FEATURES + self.DOY_FEATURES + self.COND_FEATURES + self.SCL_FEATURES].reshape(self.sequencelength)#(75,)
         cloud_prob = data[1 + self.X_FEATURES + self.DOY_FEATURES + self.COND_FEATURES + self.SCL_FEATURES:].reshape(self.sequencelength)#(75,)
@@ -680,7 +710,7 @@ class CropAttriMappingDatasetBin(Dataset):
         x[x == 0] = np.nan
         # 强制将有云/阴影的时间步在输入中设为NaN（视为缺失），使模型无法看到云的反射率
         # 配合后续的 nan_to_num 和 missing_mask=0，实现“完全无云输入”
-        if True:
+        if False:
             x[~valid_timestep_mask] = np.nan
         x_hat = x.copy()
         
@@ -1219,8 +1249,10 @@ if __name__ == "__main__":
     # 手动创建完整数据集（复用 create_contrastive_dataloader 中 phase='train' 的逻辑）
     # 使用 'train_val' 模式一次性加载训练集和验证集数据
     full_dataset = CropAttriMappingDatasetBin(
-        # 'train_val_test', 
-        'train', 
+        'train_val_test', 
+        # 'train_test', 
+        # 'val_test',
+        # 'test',
         2019, 
         Path(args.dataset_path)/'US-dataset',
         None,

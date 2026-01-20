@@ -72,11 +72,11 @@
             //     "--config_path",
             //     "configs/RS_SAITS_best.ini",
             //     "--model_path",
-            //     "./NIPS_results2/PhysioNet2012_SAITS_best/models/model_train_val_test_trainStep_1132000_valStep_566_imputationMAE_0.1810",
+            //     "./NIPS_results2/PhysioNet2012_SAITS_best/models/model_train_val_test_trainStep_693000_valStep_462_imputationMAE_0.0592",
             //     "--file_glob",
             //     "Iowa_2019_*-*-*.tif",
-            //     "--output_steps",
-            //     "36","37","38"
+            //     // "--output_steps",
+            //     // "36","37","38"
             //     // "--batch_pixels",
             //     // "8192",
             // ]
