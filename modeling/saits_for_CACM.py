@@ -18,7 +18,7 @@ class SAITS_for_CACM(nn.Module):
         **kwargs#{'device': 'cuda', 'MIT': True, 'input_with_mask': True, 'diagonal_attention_mask': True, 'param_sharing_strategy': 'inner_group'}
     ):
         super().__init__()
-        self.n_groups = n_groups#5
+        self.n_groups = n_groups#6
         self.n_group_inner_layers = n_group_inner_layers#1
         self.input_with_mask = kwargs["input_with_mask"]#True
         actual_d_feature = d_feature * 2 if self.input_with_mask else d_feature#37 * 2 =74 类似于输入的波段数
