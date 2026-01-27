@@ -88,6 +88,22 @@
             //     // "--batch_pixels",
             //     // "8192",
             // ]
+            // "args":[
+            //     "--s2_dir",
+            //     "generated_datasets/US/Iowa_S2_2019_scale_30_maxCloudProbability_100_90_300",
+            //     "--output_dir",
+            //     "generated_datasets/US/inputed_Iowa_S2_2019_scale_30_maxCloudProbability_100_90_300",
+            //     "--config_path",
+            //     "configs/RS_SAITS_best2.ini",
+            //     "--model_path",
+            //     "./NIPS_results2/PhysioNet2012_SAITS_best/models/model_train_val_test_little_trainStep_568500_valStep_379_imputationMAE_0.0665",
+            //     "--file_glob",
+            //     "Iowa_2019_*-*-*.tif",
+            //     // "--output_steps",
+            //     // "36","37","38"
+            //     // "--batch_pixels",
+            //     // "8192",
+            // ]
         }
     ]
 }
