@@ -53,7 +53,7 @@ except ImportError:
 
 from Global_Config import RANDOM_SEED
 from modeling.saits import SAITS
-from modeling.saits_for_CACM import SAITS_for_CACM
+from modeling.saits_for_CACM import SAITS_for_CACM,PatchSAITS
 from modeling.transformer import TransformerEncoder
 from modeling.brits import BRITS
 from modeling.mrnn import MRNN
@@ -89,6 +89,7 @@ MODEL_DICT = {
     "Transformer": TransformerEncoder,
     "SAITS": SAITS,
     "SAITS_for_CACM":SAITS_for_CACM,
+    "PatchSAITS":PatchSAITS,
     # RNN based
     "BRITS": BRITS,
     "MRNN": MRNN,
@@ -1146,7 +1147,7 @@ if __name__ == "__main__":
     cfg.read(args.config_path)
     args = read_arguments(args, cfg)
 
-    if args.model_type in ["Transformer", "SAITS", "SAITS_for_CACM"]:  #True if SA-based model
+    if args.model_type in ["Transformer", "SAITS", "SAITS_for_CACM","PatchSAITS"]:  #True if SA-based model
         args.input_with_mask = cfg.getboolean("model", "input_with_mask")#True
         args.n_groups = cfg.getint("model", "n_groups")#5
         args.n_group_inner_layers = cfg.getint("model", "n_group_inner_layers")#1

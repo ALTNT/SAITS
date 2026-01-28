@@ -25,9 +25,15 @@
             //     // "NIPS_results/PhysioNet2012_SAITS_best.out",
             // ]
             // run_models4_shared_memory_train_and_val.py
+            // "args": [
+            //     "--config_path",
+            //     "configs/RS_SAITS_best2.ini",
+            //     // "--test_mode",
+            //     // "NIPS_results/PhysioNet2012_SAITS_best.out",
+            // ]
             "args": [
                 "--config_path",
-                "configs/RS_SAITS_best2.ini",
+                "configs/RS_PATCH_SAITS.ini",
                 // "--test_mode",
                 // "NIPS_results/PhysioNet2012_SAITS_best.out",
             ]

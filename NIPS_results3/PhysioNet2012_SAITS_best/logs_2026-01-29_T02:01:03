@@ -1,0 +1,19 @@
+2026-01-29 02:01:03,010 - args: Namespace(config_path='configs/RS_PATCH_SAITS.ini', test_mode=False, param_searching_mode=False, dataset_base_dir='generated_datasets', result_saving_base_dir='NIPS_results3', seq_len=75, batch_size=256, num_workers=8, feature_num=10, dataset_name='data-no-mask-cloud', dataset_path='generated_datasets/data-no-mask-cloud', eval_every_n_steps=1500, MIT=True, ORT=True, TV=True, lr=0.000682774550436755, optimizer_type='adam', weight_decay=0.0, device='cuda', epochs=10000, early_stop_patience=15, model_saving_strategy='best', max_norm=0.0, imputation_loss_weight=1.0, reconstruction_loss_weight=3.0, total_variation_loss_weight=0.2, model_name='PhysioNet2012_SAITS_best', model_type='PatchSAITS', input_with_mask=False, n_groups=6, n_group_inner_layers=1, param_sharing_strategy='inner_group', d_model=128, d_inner=512, n_head=8, d_k=32, d_v=32, dropout=0.0, diagonal_attention_mask=True, model_saving='NIPS_results3/PhysioNet2012_SAITS_best/models/2026-01-29_T02:01:03', log_saving='NIPS_results3/PhysioNet2012_SAITS_best/logs')
+2026-01-29 02:01:03,010 - Config file path: configs/RS_PATCH_SAITS.ini
+2026-01-29 02:01:03,010 - Model name: PhysioNet2012_SAITS_best
+2026-01-29 02:01:22,821 - Num of total trainable params is: 1592754
+2026-01-29 02:01:22,962 - Creating adam optimizer...
+2026-01-29 02:01:23,907 - Entering training mode...
+2026-01-29 02:01:23,907 - train set len is 2960000, batch size is 256,so each epoch has 11563 steps
+2026-01-29 02:01:36,267 - idx: 0
+2026-01-29 02:01:36,267 - Epoch 0: Data loading time: 0.6787s, Model forward/backward time: 11.6787s
+2026-01-29 02:01:38,285 - idx: 200
+2026-01-29 02:01:38,285 - Epoch 0: Data loading time: 0.0001s, Model forward/backward time: 0.0094s
+2026-01-29 02:01:40,238 - idx: 400
+2026-01-29 02:01:40,238 - Epoch 0: Data loading time: 0.0002s, Model forward/backward time: 0.0079s
+2026-01-29 02:01:42,241 - idx: 600
+2026-01-29 02:01:42,241 - Epoch 0: Data loading time: 0.0001s, Model forward/backward time: 0.0095s
+2026-01-29 02:01:44,192 - idx: 800
+2026-01-29 02:01:44,192 - Epoch 0: Data loading time: 0.0001s, Model forward/backward time: 0.0085s
+2026-01-29 02:01:46,173 - idx: 1000
+2026-01-29 02:01:46,173 - Epoch 0: Data loading time: 0.0001s, Model forward/backward time: 0.0083s

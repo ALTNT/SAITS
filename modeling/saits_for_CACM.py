@@ -210,3 +210,118 @@ class SAITS_for_CACM(nn.Module):
             "reconstruction_MAE": reconstruction_MAE,
             "imputation_MAE": imputation_MAE,
         }
+
+class PatchSAITS(nn.Module):
+    """
+    Patch-based SAITS implementation.
+    Compresses temporal sequence by grouping time steps into patches (PatchTST/TiMAE style).
+    Reduces sequence length from T to T/PatchSize (e.g., 75 -> 15).
+    """
+    def __init__(
+        self,
+        n_groups,
+        n_group_inner_layers,
+        d_time,
+        d_feature,
+        d_model,
+        d_inner,
+        n_head,
+        d_k,
+        d_v,
+        dropout,
+        patch_len=5,
+        stride=5,
+        **kwargs
+    ):
+        super().__init__()
+        self.patch_len = patch_len
+        self.stride = stride
+        self.d_time = d_time # 75
+        self.d_feature = d_feature # 10
+        self.d_model = d_model
+        self.MIT = kwargs["MIT"]#True
+        
+        # Calculate number of patches
+        # Assuming d_time is divisible by stride (75 / 5 = 15)
+        self.num_patches = d_time // stride
+        
+        self.input_with_mask = kwargs.get("input_with_mask", True)
+        # Input to patch embedding includes mask if input_with_mask is True
+        input_dim = d_feature * 2 if self.input_with_mask else d_feature
+        
+        # Patch Embedding: (B, T, C) -> (B, T/P, C*P) -> (B, T/P, d_model)
+        self.patch_dim = input_dim * patch_len# 10*5
+        self.patch_proj = nn.Linear(self.patch_dim, d_model)
+        
+        self.position_enc = PositionalEncoding(d_model, 366 + 2, 10000)
+        self.dropout = nn.Dropout(p=dropout)
+        
+        # Encoder Layers (Reusing EncoderLayer)
+        self.layers = nn.ModuleList([
+            EncoderLayer(
+                self.num_patches, # Corrected: Use patch count (15) instead of full time (75)
+                input_dim, # Not strictly used for sizing
+                d_model, d_inner, n_head, d_k, d_v, dropout, 0, **kwargs
+            )
+            for _ in range(n_groups * n_group_inner_layers)
+        ])
+        
+        # Decoder / Reconstruction Head
+        self.head = nn.Linear(d_model, self.d_feature * patch_len) # Only reconstruct feature
+
+    def forward(self, inputs, stage):#stage='Train'
+        X, masks, doy = inputs["X"], inputs["missing_mask"], inputs["doy"]
+        # X: (B, 75, 10), masks: (B, 75, 10)
+        
+        # 1. Prepare Input
+        input_X = torch.cat([X, masks], dim=2) if self.input_with_mask else X 
+        
+        # 2. Patching
+        B, T, C = input_X.shape
+        # Reshape to (B, NumPatches, PatchLen * C)
+        # 75 -> 15 patches of length 5
+        x_patched = input_X.view(B, self.num_patches, self.patch_len * C) 
+        
+        # 3. Embedding
+        x_emb = self.patch_proj(x_patched) # (B, 15, d_model)
+        
+        # 4. Positional Encoding
+        # Downsample doy for patches (take every stride-th element)
+        doy_patched = doy[:, ::self.stride] if doy is not None else None
+        x_emb = self.position_enc(x_emb, doy_patched)
+        x_emb = self.dropout(x_emb)
+        
+        # 5. Encoder
+        for layer in self.layers:
+            x_emb, _ = layer(x_emb)
+        
+        enc_output = x_emb # (B, 15, d_model) -> This is the compressed latent
+        
+        # 6. Reconstruction
+        recon_patched = self.head(enc_output) # (B, 15, 10*5)
+        
+        # Reshape back to (B, 75, 10)
+        learned_presentation = recon_patched.view(B, T, self.d_feature)
+        
+        # return enc_output, 
+        reconstruction_MAE = masked_mae_cal(learned_presentation, X, masks)
+
+
+        if (self.MIT or stage == "val") and stage != "test":#True
+            # have to cal imputation loss in the val stage; no need to cal imputation loss here in the test stage
+            imputation_MAE = masked_mae_cal(
+                learned_presentation, inputs["X_holdout"], inputs["indicating_mask"]
+            )
+            tv_loss = total_variation_loss(learned_presentation) 
+        else:
+            imputation_MAE = torch.tensor(0.0)
+            tv_loss = torch.tensor(0.0)
+
+        return {
+            "imputed_data": learned_presentation,
+            "reconstruction_loss": reconstruction_MAE,
+            "imputation_loss": imputation_MAE,
+            "total_variation_loss":tv_loss,
+            "reconstruction_MAE": reconstruction_MAE,
+            "imputation_MAE": imputation_MAE,
+        }
