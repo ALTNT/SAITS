@@ -219,26 +219,26 @@ class PatchSAITS(nn.Module):
     """
     def __init__(
         self,
-        n_groups,
-        n_group_inner_layers,
-        d_time,
-        d_feature,
-        d_model,
-        d_inner,
-        n_head,
-        d_k,
-        d_v,
-        dropout,
-        patch_len=5,
-        stride=5,
+        n_groups,#6
+        n_group_inner_layers,#1
+        d_time,#75
+        d_feature,#10
+        d_model,#128
+        d_inner,#512
+        n_head,#8
+        d_k,#32
+        d_v,#32
+        dropout,#0.0
+        patch_len=5,#5
+        stride=5,#5
         **kwargs
     ):
         super().__init__()
-        self.patch_len = patch_len
-        self.stride = stride
+        self.patch_len = patch_len#5
+        self.stride = stride#5
         self.d_time = d_time # 75
         self.d_feature = d_feature # 10
-        self.d_model = d_model
+        self.d_model = d_model#128
         self.MIT = kwargs["MIT"]#True
         
         # Calculate number of patches
@@ -269,7 +269,7 @@ class PatchSAITS(nn.Module):
         # Decoder / Reconstruction Head
         self.head = nn.Linear(d_model, self.d_feature * patch_len) # Only reconstruct feature
 
-    def forward(self, inputs, stage):#stage='Train'
+    def impute(self, inputs):
         X, masks, doy = inputs["X"], inputs["missing_mask"], inputs["doy"]
         # X: (B, 75, 10), masks: (B, 75, 10)
         
@@ -302,6 +302,13 @@ class PatchSAITS(nn.Module):
         
         # Reshape back to (B, 75, 10)
         learned_presentation = recon_patched.view(B, T, self.d_feature)
+        
+        return learned_presentation, learned_presentation
+
+    def forward(self, inputs, stage):#stage='Train'
+        X, masks, doy = inputs["X"], inputs["missing_mask"], inputs["doy"]
+        
+        imputed_data, learned_presentation = self.impute(inputs)
         
         # return enc_output, 
         reconstruction_MAE = masked_mae_cal(learned_presentation, X, masks)

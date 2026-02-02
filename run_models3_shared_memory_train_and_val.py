@@ -357,6 +357,10 @@ def train(
     logger,
 ):
     for epoch in range(args.epochs):#10000
+        # 确保 DistributedSampler 在每个 epoch 使用不同的随机种子进行 shuffle
+        if hasattr(train_dataloader.sampler, "set_epoch"):
+            train_dataloader.sampler.set_epoch(epoch)
+            
         early_stopping = False
         args.final_epoch = True if epoch == args.epochs - 1 else False#False
         
@@ -506,15 +510,15 @@ class CropAttriMappingDatasetBin(Dataset):
         self.is_sharded = len(self.bin_paths) > 1
 
         # 二进制布局常量
-        self.X_FEATURES = self.sequencelength * 10
-        self.DOY_FEATURES = self.sequencelength
+        self.X_FEATURES = 85 * 10
+        self.DOY_FEATURES = 85
         self.COND_FEATURES = 8 * 3
-        self.SCL_FEATURES = 75
-        self.CLOUD_PROB_FEATURES = 75
+        self.SCL_FEATURES = 85
+        self.CLOUD_PROB_FEATURES = 85
         # self.SAMPLE_SIZE_BYTES = 4 * (1 + self.X_FEATURES + self.DOY_FEATURES + self.COND_FEATURES)
         self.SAMPLE_SIZE_BYTES = 4 * (1 + self.X_FEATURES + self.DOY_FEATURES + self.COND_FEATURES + self.SCL_FEATURES + self.CLOUD_PROB_FEATURES)
         # self.floats_count = 1 + self.X_FEATURES + self.DOY_FEATURES + self.COND_FEATURES
-        self.floats_count = 1 + self.X_FEATURES + self.DOY_FEATURES + self.COND_FEATURES + self.SCL_FEATURES + self.CLOUD_PROB_FEATURES
+        self.floats_count = 1 + self.X_FEATURES + self.DOY_FEATURES + self.COND_FEATURES + self.SCL_FEATURES + self.CLOUD_PROB_FEATURES#1130
         self.dtype = np.float32
 
         # 预加载路径并计算样本数，初始化memmap
@@ -691,23 +695,36 @@ class CropAttriMappingDatasetBin(Dataset):
         start_f = local_sample_idx * self.floats_count#6752000
         data = buf[start_f:start_f + self.floats_count]
 
-        n_features = self.X_FEATURES // self.sequencelength
+        n_features = self.X_FEATURES // 85
         data = np.array(data, copy=True)
         y = data[0]
-        x = data[1:1 + self.X_FEATURES].reshape(self.sequencelength, n_features)
-        doy = data[1 + self.X_FEATURES:1 + self.X_FEATURES + self.DOY_FEATURES].reshape(self.sequencelength)
+        x = data[1:1 + self.X_FEATURES].reshape(85, n_features)#(85,10)
+        doy = data[1 + self.X_FEATURES:1 + self.X_FEATURES + self.DOY_FEATURES].reshape(85)#(85,)
         if (doy < 0).any() or (doy >= 400).any():
             raise ValueError("DOY values must be between 0 and 399.")
         # cond = data[1 + self.X_FEATURES + self.DOY_FEATURES:1 + self.X_FEATURES + self.DOY_FEATURES + self.COND_FEATURES].reshape(8, 3)
-        scl = data[1 + self.X_FEATURES + self.DOY_FEATURES + self.COND_FEATURES:1 + self.X_FEATURES + self.DOY_FEATURES + self.COND_FEATURES + self.SCL_FEATURES].reshape(self.sequencelength)#(75,)
-        cloud_prob = data[1 + self.X_FEATURES + self.DOY_FEATURES + self.COND_FEATURES + self.SCL_FEATURES:].reshape(self.sequencelength)#(75,)
+        scl = data[1 + self.X_FEATURES + self.DOY_FEATURES + self.COND_FEATURES:1 + self.X_FEATURES + self.DOY_FEATURES + self.COND_FEATURES + self.SCL_FEATURES].reshape(85)#(75,)
+        cloud_prob = data[1 + self.X_FEATURES + self.DOY_FEATURES + self.COND_FEATURES + self.SCL_FEATURES:].reshape(85)#(85,)
+
+        # Randomly crop 75 contiguous time steps from 85
+        total_len = 85
+        crop_len = self.sequencelength
+        if total_len > crop_len:
+            max_start = total_len - crop_len # 85 - 75 = 10
+            start_idx = np.random.randint(0, max_start + 1)
+            end_idx = start_idx + crop_len
+            
+            x = x[start_idx:end_idx] # (75, 10)
+            doy = doy[start_idx:end_idx] # (75,)
+            scl = scl[start_idx:end_idx] # (75,)
+            cloud_prob = cloud_prob[start_idx:end_idx] # (75,)
 
         # 预训练策略：为了赋予模型在有效信息稀疏及应急制图场景下提取鲁棒特征的能力，我们对原始 Sentinel-2 数据设计了多任务自监督预训练策略。该策略通过有策略的掩码（Strategic Masking）与数据增强，迫使模型学习作物生长的内在规律：
         # 掩码插补任务 (MIT): 随机掩盖部分有效观测值（非云和云阴影），迫使编码器仅根据剩余的上下文信息预测这些被掩盖的真实值。该任务旨在让模型学习作物生长曲线的连续性与自相关性。——已实现
         # 有效观测重建任务 (ORT): 要求模型对未被掩盖的有效观测值进行重构。通过最小化重构误差，确保模型提取的潜在特征能够高保真地保留原始数据的光谱保真度。——已实现
         # 噪声增强: 向非云/影区域添加高斯噪声（均值0，标准差0.5）以模拟云和云阴影[3]，要求模型能重建该时序,从而提升模型在低质量数据下的鲁棒性。——代码实现可合并到掩码预测任务 (MIT)，已实现
 
-        valid_timestep_mask = (scl != 3) & (scl != 7) & (scl != 8) & (scl != 9) & (scl != 10) & (cloud_prob < 50)#(75,)
+        valid_timestep_mask = (scl != 1) & (scl != 2) & (scl != 3) & (scl != 7) & (scl != 8) & (scl != 9) & (scl != 10) & (cloud_prob < 50)#(75,)
         x[x == 0] = np.nan
         # 强制将有云/阴影的时间步在输入中设为NaN（视为缺失），使模型无法看到云的反射率
         # 配合后续的 nan_to_num 和 missing_mask=0，实现“完全无云输入”
@@ -720,7 +737,7 @@ class CropAttriMappingDatasetBin(Dataset):
         candidate_timestep_mask = valid_timestep_mask & obs_per_timestep#(75,) 是观测值且不是云 和shadow则为 True
         candidate_timestep_idx = np.where(candidate_timestep_mask)[0]#（20，）是观测值且不是云 和shadow的索引
         
-        masked_rows = np.zeros(self.sequencelength, dtype=bool)#(75,)
+        masked_rows = np.zeros(crop_len, dtype=bool)#(75,)
         if candidate_timestep_idx.size > 0:#进行人工掩码
             num_mask_ts = int(round(candidate_timestep_idx.size * 0.4))
             if num_mask_ts > 0:

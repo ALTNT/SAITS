@@ -336,6 +336,9 @@ def train(
     logger,
 ):
     for epoch in range(args.epochs):#10000
+        # 确保 DistributedSampler 在每个 epoch 使用不同的随机种子进行 shuffle
+        if hasattr(train_dataloader.sampler, "set_epoch"):
+            train_dataloader.sampler.set_epoch(epoch)
         early_stopping = False
         args.final_epoch = True if epoch == args.epochs - 1 else False#False
         
@@ -562,7 +565,7 @@ class CropAttriMappingDatasetBin(Dataset):
         # cond = data[1 + self.X_FEATURES + self.DOY_FEATURES:1 + self.X_FEATURES + self.DOY_FEATURES + self.COND_FEATURES].reshape(8, 3)
         scl = data[1 + self.X_FEATURES + self.DOY_FEATURES + self.COND_FEATURES:].reshape(self.sequencelength)#(75,)
 
-        valid_timestep_mask = (scl != 3) & (scl != 8) & (scl != 9) & (scl != 10)#(75,)
+        valid_timestep_mask = (scl != 1) & (scl != 2) & (scl != 3) & (scl != 8) & (scl != 9) & (scl != 10)#(75,)
         x[x == 0] = np.nan
         x_hat = x.copy()
         obs_per_timestep = np.any(~np.isnan(x_hat), axis=1)#(75,)是观测值则为 True

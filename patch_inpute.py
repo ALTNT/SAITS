@@ -30,12 +30,16 @@ from einops import rearrange
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from datetime import datetime, timedelta
+from modeling.transformer import TransformerEncoder
 
 import torch
 import torch.nn.parallel
 
-from modeling.saits_for_CACM import SAITS_for_CACM
+from modeling.saits_for_CACM import SAITS_for_CACM,PatchSAITS
 from modeling.utils import load_model
+from modeling.brits import BRITS
+from modeling.saits import SAITS
+from modeling.mrnn import MRNN
 
 # 在文件开头添加导入
 try:
@@ -56,6 +60,16 @@ std2 = np.array([0.36185714564075394, 0.3371488493517183, 0.33266536803207, 0.33
 
 mean_c=np.array([78.02576446969697, 198.9981634469697, 1850.3222502462122])
 std_c = np.array([120.325428898157, 124.14974885223911, 680.851609868019])
+MODEL_DICT = {
+    # Self-Attention (SA) based
+    "Transformer": TransformerEncoder,
+    "SAITS": SAITS,
+    "SAITS_for_CACM":SAITS_for_CACM,
+    "PatchSAITS":PatchSAITS,
+    # RNN based
+    "BRITS": BRITS,
+    "MRNN": MRNN,
+}
 
 # 设置日志
 logging.basicConfig(
@@ -67,7 +81,8 @@ logger = logging.getLogger(__name__)
 class PatchBasedMapping:
     """基于patch的作物制图处理器"""
     
-    def __init__(self, s2_dir, output_dir, config_path, model_path, device=None, file_glob=None, output_steps=None):
+    def __init__(self, s2_dir, output_dir, config_path, model_path, \
+            device=None, file_glob=None, output_steps=None):
         self.s2_dir = Path(s2_dir)
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -80,6 +95,7 @@ class PatchBasedMapping:
 
         self.sequencelength = cfg.getint("dataset", "seq_len")
         self.feature_num = cfg.getint("dataset", "feature_num")
+        self.model_type = cfg.get("model", "model_type")#"SAITS_for_CACM"
 
         self.device = device if device is not None else cfg.get("training", "device")
         self.device = "cuda" if ("cuda" in self.device and torch.cuda.is_available()) else "cpu"
@@ -91,7 +107,7 @@ class PatchBasedMapping:
         self.output_steps = output_steps
 
         self.model = None
-        logger.info('加载 SAITS_for_CACM 模型...')
+        logger.info(f'加载 {self.model_type} 模型...')
 
         model_args = {
             "device": self.device,#"cuda"
@@ -109,9 +125,12 @@ class PatchBasedMapping:
             "input_with_mask": cfg.getboolean("model", "input_with_mask"),#False
             "diagonal_attention_mask": cfg.getboolean("model", "diagonal_attention_mask"),#True
             "param_sharing_strategy": cfg.get("model", "param_sharing_strategy"),#"inner_group"
+            "patch_len": cfg.getint("model", "patch_len"),#5
+            "stride": cfg.getint("model", "stride"),#5
         }
 
-        self.model = SAITS_for_CACM(**model_args)
+        self.model = MODEL_DICT[self.model_type](**model_args)#'SAITS'
+        # self.model = SAITS_for_CACM(**model_args)
         if self.device == "cuda":
             self.model = self.model.to(self.device)
         self.model = load_model(self.model, self.model_path, logger)

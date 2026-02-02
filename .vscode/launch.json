@@ -110,6 +110,38 @@
             //     // "--batch_pixels",
             //     // "8192",
             // ]
+            // "args":[
+            //     "--s2_dir",
+            //     "generated_datasets/US/Iowa_S2_2019_scale_30_maxCloudProbability_100_90_300",
+            //     "--output_dir",
+            //     "generated_datasets/US/inputed_Iowa_S2_2019_scale_30_maxCloudProbability_100_90_300",
+            //     "--config_path",
+            //     "configs/RS_PATCH_SAITS.ini",
+            //     "--model_path",
+            //     "./NIPS_results3/PhysioNet2012_SAITS_best/models/model_trainStep_364500_valStep_243_imputationMAE_0.0695",
+            //     "--file_glob",
+            //     "Iowa_2019_*-*-*.tif",
+            //     // "--output_steps",
+            //     // "36","37","38"
+            //     // "--batch_pixels",
+            //     // "8192",
+            // ]
+            // "args":[
+            //     "--s2_dir",
+            //     "generated_datasets/US/Louisiana_S2_2019_scale_30_maxCloudProbability_100_90_300",
+            //     "--output_dir",
+            //     "generated_datasets/US/inputed_Louisiana_S2_2019_scale_30_maxCloudProbability_100_90_300",
+            //     "--config_path",
+            //     "configs/RS_PATCH_SAITS.ini",
+            //     "--model_path",
+            //     "./NIPS_results3/PhysioNet2012_SAITS_best/models/model_trainStep_364500_valStep_243_imputationMAE_0.0695",
+            //     "--file_glob",
+            //     "Louisiana_2019_*-*-*.tif",
+            //     // "--output_steps",
+            //     // "36","37","38"
+            //     // "--batch_pixels",
+            //     // "8192",
+            // ]
         }
     ]
 }
